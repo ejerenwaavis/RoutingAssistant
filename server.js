@@ -27,6 +27,7 @@ app.use(express.json());
 
 app.route("/")
   .get(function(req,res){
+    print(tempFilePath);
     res.render("home.ejs");
   })
 
