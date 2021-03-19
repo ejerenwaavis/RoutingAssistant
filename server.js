@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-const tempFilePath = 'tempFiles/';
+const tempFilePath = 'tmp/';
 
 
 const express = require("express");
@@ -39,7 +39,7 @@ app.route("/")
 
       let tempFileName = (new Date).getTime() + ' USER_ID' + '.xlsx';
       getData(upload.path).then(function(addresses){
-        // console.log(addresses);
+        console.log("Records read: "+addresses.length);
           populateExcelData(tempFileName,addresses);
           res.render("excellDownload.ejs", {filePath:tempFilePath+tempFileName});
       })
@@ -189,7 +189,7 @@ function populateExcelData(fileName,addresses){
             row.commit();
             i++;
           }
-          return workbook.xlsx.writeFile("tempFiles/"+fileName);
+          return workbook.xlsx.writeFile(tempFilePath+fileName);
           // return workbook.xlsx.writeFile(tempFilePath + "legacyNew.xlsx");
         })
 }
