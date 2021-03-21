@@ -47,7 +47,7 @@ app.use(express.json());
 
 app.route("/")
   .get(function(req, res) {
-    print(tempFilePath);
+    // print(tempFilePath);
     res.render("home.ejs");
   })
 
@@ -57,7 +57,7 @@ app.route("/fileUpload")
     form.parse(req, function(err, fields, files) {
       let upload = files.elicsv;
 
-      let tempFileName = ((new Date).getTime() + ' USER_ID' + '.xlsx').replace(/ /g, "");
+      let tempFileName = ((new Date).toDateString() + ' USER_ID' + '.xlsx').replace(/ /g, "_");
 
       getData(upload.path).then(function(addresses) {
         console.log("Records read: " + addresses.length);
@@ -294,7 +294,7 @@ app.route("/deleteAccess")
 
 app.listen(process.env.PORT || 3000, function() {
   console.log("LS ASsistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3000));
-  print("./")
+  // print("./")
 });
 
 
