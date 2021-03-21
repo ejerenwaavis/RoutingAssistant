@@ -37,7 +37,7 @@ app.route("/")
     form.parse(req, function (err, fields, files) {
       let upload = files.elicsv;
 
-      let tempFileName = (new Date).getTime() + ' USER_ID' + '.xlsx';
+      let tempFileName = (new Date).toDateString() + ' USER_ID' + '.xlsx';
       getData(upload.path).then(function(addresses){
         console.log("Records read: "+addresses.length);
           populateExcelData(tempFileName,addresses);
@@ -180,12 +180,14 @@ function populateExcelData(fileName,addresses){
           var worksheet = workbook.getWorksheet(1);
           let i=2;
           for(address of addresses){
+            let country = address.Country.toUpperCase();
+            let state = address.State.toUpperCase();
             var row = worksheet.getRow(i);
             row.getCell(1).value = address.Name;
             row.getCell(2).value = address.Street;
             row.getCell(3).value = address.City;
-            row.getCell(4).value = address.State;
-            row.getCell(6).value = address.Country;
+            row.getCell(4).value = state;
+            row.getCell(6).value = (country.length>3)? country.split(" ")[0][0] + country.split(" ")[1][0]:country;
             row.commit();
             i++;
           }
