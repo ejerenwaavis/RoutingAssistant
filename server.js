@@ -7,7 +7,7 @@ const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET
 
 
 
-const tempFilePath = '/tmp/';
+const tempFilePath = 'tmp/';
 
 
 const express = require("express");
