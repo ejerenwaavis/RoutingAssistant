@@ -57,7 +57,7 @@ app.route("/fileUpload")
   form.parse(req, function (err, fields, files) {
     let upload = files.elicsv;
 
-    let tempFileName = ((new Date).toDateString() + ' USER_ID' + '.xlsx').replace(/ /g, "");
+    let tempFileName = ((new Date).getTime() + ' USER_ID' + '.xlsx').replace(/ /g, "");
 
     getData(upload.path).then(function(addresses){
       console.log("Records read: "+addresses.length);
