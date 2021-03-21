@@ -118,3 +118,7 @@ dist
 
 # Media Resource directories
 public/media-resources/
+
+#probably affecting the heroku tmpFolder
+tmp/
+tmp
