@@ -1,5 +1,12 @@
 require("dotenv").config();
 
+const CLIENT_ID=process.env.CLIENTID;
+const CLIENT_SECRETE=process.env.CLIENTSECRETE;
+const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID
+const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET
+
+
+
 const tempFilePath = 'tmp/';
 
 
@@ -10,7 +17,20 @@ const papa = require("papaparse");
 const bodyParser = require("body-parser");
 const fs = require("fs");
 const Excel = require('exceljs');
-var formidable = require('formidable');
+const formidable = require('formidable');
+const mongoose = require("mongoose");
+const bcrypt = require('bcrypt');
+// const nodemailer = require('nodemailer');
+// const stripe = require("stripe")(STRIPEAPI);
+
+const session = require("express-session");
+const passport = require('passport');
+const passportLocalMongoose = require("passport-local-mongoose");
+const LocalStrategy = require('passport-local').Strategy;
+const FacebookStrategy = require('passport-facebook').Strategy;
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+
+
 
 
 // Configure app to user EJS abd bodyParser
@@ -19,7 +39,7 @@ app.use(bodyParser.urlencoded({
   extended: true
 }));
 app.use(express.static("public"));
-app.use(express.static("tempFiles"));
+app.use(express.static("tmp"));
 app.use(express.static("."));
 app.use(express.json());
 
@@ -31,31 +51,210 @@ app.route("/")
     res.render("home.ejs");
   })
 
-  app.route("/fileUpload")
+app.route("/fileUpload")
+.post(function(req,res){
+  var form = new formidable.IncomingForm();
+  form.parse(req, function (err, fields, files) {
+    let upload = files.elicsv;
+
+    let tempFileName = ((new Date).toDateString() + ' USER_ID' + '.xlsx').replace(/ /g, "-");
+
+    getData(upload.path).then(function(addresses){
+      console.log("Records read: "+addresses.length);
+        populateExcelData(tempFileName,addresses);
+        res.render("excellDownload.ejs", {filePath:tempFilePath+tempFileName});
+    })
+
+  });
+
+})
+
+
+app.route("/delete")
   .post(function(req,res){
-    var form = new formidable.IncomingForm();
-    form.parse(req, function (err, fields, files) {
-      let upload = files.elicsv;
-
-      let tempFileName = (new Date).toDateString() + ' USER_ID' + '.xlsx';
-      getData(upload.path).then(function(addresses){
-        console.log("Records read: "+addresses.length);
-          populateExcelData(tempFileName,addresses);
-          res.render("excellDownload.ejs", {filePath:tempFilePath+tempFileName});
-      })
-
-    });
-
+    let path = req.body.path;
+    console.log("File to be deleted: "+path);
+    deleteFile(path);
+    res.sendStatus(200);
   })
 
 
-  app.route("/delete")
-    .post(function(req,res){
-      let path = req.body.path;
-      console.log("File to be deleted: "+path);
-      deleteFile(path);
-      res.sendStatus(200);
+
+
+  /****************** Authentication *******************/
+  app.route("/login")
+    .get(function(req, res) {
+      if(req.isAuthenticated()){
+        // console.log("Authenticated Request");
+        res.redirect("/")
+      } else {
+        // console.log("Unauthorized Access, Please Login");
+        res.render("login", {
+          body: new Body("Login", "", ""),
+          login: null,
+          user: req.user,
+        });
+      }
     })
+    .post(function(req, res, next) {
+    passport.authenticate('local', function(err, user, info) {
+      console.log(user);
+      // console.log(info);
+      if (err) { return next(err); }
+      // Redirect if it fails
+      if (!user) { return res.render('login',{body:new Body("Login",info.message,""), login:req.body.username }); }
+      req.logIn(user, function(err) {
+        if (err) { return next(err); }
+        // Redirect if it succeeds
+        return res.redirect('/');
+      });
+    })(req, res, next);
+  });
+
+  app.get('/auth/google', passport.authenticate('google', {
+    // scope: ['profile']
+    scope: [
+          'https://www.googleapis.com/auth/userinfo.profile',
+          'https://www.googleapis.com/auth/userinfo.email'
+      ]
+  }));
+
+  app.get('/auth/facebook', passport.authenticate('facebook',{ scope: 'email'}));
+  app.route("/facebookLoggedin")
+      .get(function(req, res, next) {
+        passport.authenticate('facebook', function(err, user, info) {
+          if (err) {
+            console.log(err);
+            return next(err);
+          }
+          // Redirect if it fails
+          if (!user) { console.log(err); return res.redirect('/login'); }
+          req.logIn(user, function(err) {
+            if (err) { return next(err); }
+            // Redirect if it succeeds
+            return res.redirect('/');
+          });
+        })(req, res, next);
+      });
+
+  app.route("/googleLoggedin")
+      .get(function(req, res, next) {
+        passport.authenticate('google', function(err, user, info) {
+          if (err) { return next(err); }
+          // Redirect if it fails
+          if (!user) { return res.render('login', {
+            body: new Body("Login", "", "Account Created successfully, Please log in again to continue"),
+            login: null,
+            user: req.user,
+          } ); }
+          req.logIn(user, function(err) {
+            if (err) { return next(err); }
+            // Redirect if it succeeds
+            return res.redirect('/home');
+          });
+        })(req, res, next);
+      });
+
+  app.route("/logout")
+    .get(function(req, res) {
+      req.logout();
+      console.log("Logged Out");
+      // res.redirect("/");
+      res.render("home", {
+        body: new Body("Home", "", ""),
+        purchase:initialPurchase(),
+        user:null,
+      });
+    });
+
+  app.route("/register")
+    .get(function(req, res) {
+      if(req.isAuthenticated()){
+        // console.log("Authenticated Request");
+        res.redirect("/home")
+      } else {
+        // console.log("Unauthorized Access, Please Login");
+        res.render("register", {
+          body: new Body("Register", "", ""),
+          purchase: initialPurchase(),
+          user: null,
+        });
+      }
+    })
+    .post(function(req,res){
+      const user = new User({
+        _id: req.body.username,
+        username: req.body.username,
+        phone: req.body.phone,
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        password: req.body.password,
+        // DoB: new Date(req.body.DoB).toLocaleString(),
+        photoURL: "",
+        userHasPassword:true,
+        verified:false,
+      })
+      let hahsPassword;
+      bcrypt.hash(req.body.password, SALTROUNDS, function(err, hash) {
+          if(!err){
+            user.password = hash;
+            // console.log(user);
+            User.exists({_id:user._id},function(err,exists){
+              if(exists){
+                res.render("/register",{
+                  body:new Body("Register","User email aready exists",""),
+                  purchase: initialPurchase(),
+                  user: user,
+                });
+              }else{
+                user.save(function(err,savedObj){
+                  // console.log(err);
+                  if(!err){
+                    // console.log(savedObj);
+                    res.redirect("/login");
+                  }else{
+
+                  }
+                })
+              }
+            });
+          }else{
+            // console.log(user);
+            // console.log(err);
+            res.render("register",{
+              body:new Body("Register","Unable to complete registration (error: e-PWD)",""),
+              purchase: initialPurchase(),
+              user: user,
+            });
+          }
+      });
+
+    })
+
+  app.route("/usernameExist")
+      .post(function(req,res){
+        // console.log("username to search ---> "+req.body.username);
+        User.exists({_id:req.body.username}, function(err,exists){
+          res.send(exists);
+        })
+      })
+
+  app.route("/deleteAccess")
+    .get(function(req,res){
+      let provider = req.params.provider;
+      if(provider === provider){
+        res.render("accessDeletion",{body:new Body("Delete Access","",""), user:req.user});
+      }
+    })
+    .post(function(req,res){
+      User.deleteOne({_id:req.user.username},function(err,deleted){
+        console.log(err);
+        console.log(deleted);
+        res.redirect("/logout")
+      })
+    })
+
+
 
 
 
@@ -66,10 +265,7 @@ app.listen(process.env.PORT || 3000, function() {
 
 
 
-
 /************ helper function ***************/
-
-
 // prints all the files in the folder path supplied
 async function print(path) {
   const dir = await fs.promises.opendir(path);
@@ -194,4 +390,10 @@ function populateExcelData(fileName,addresses){
           return workbook.xlsx.writeFile(tempFilePath+fileName);
           // return workbook.xlsx.writeFile(tempFilePath + "legacyNew.xlsx");
         })
+}
+
+function Body(title, error, message) {
+  this.title = title;
+  this.error = error;
+  this.message = message;
 }
