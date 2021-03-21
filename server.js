@@ -261,6 +261,7 @@ app.route("/delete")
 
 app.listen(process.env.PORT || 3000, function() {
   console.log("LS ASsistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3000));
+  print("./")
 });
 
 
@@ -302,6 +303,7 @@ function copyLegacyTemplate(tempFileName) {
 function getData(filePath) {
   return new Promise(function(resolve, reject) {
     fs.readFile(filePath, 'utf8', function(err, data) {
+      console.log(filePath);
       if (!err) {
         // console.log(data);
         let parsedJSON = papa.parse(data);
