@@ -56,9 +56,8 @@ app.route("/fileUpload")
     var form = new formidable.IncomingForm();
     form.parse(req, function(err, fields, files) {
       let upload = files.elicsv;
-
-      let tempFileName = ((new Date).toDateString() + ' USER_ID' + '.xlsx').replace(/ /g, "_");
-
+      let today = new Date;
+      let tempFileName = (today.toDateString()+ ' ' +today.getHours()+ '-' +today.getMinutes()+ ' USER_ID' + '.xlsx').replace(/ /g, "_");
       getData(upload.path).then(function(addresses) {
         console.log("Records read: " + addresses.length);
         populateExcelData(tempFileName, addresses);
@@ -312,8 +311,18 @@ async function print(path) {
 function deleteFile(path) {
   setTimeout(function() {
     fs.unlink(path, (err) => {
-      if (err) throw err;
-      console.log(path + ': was deleted');
+      if(err){
+        if (err.code == "ENOENT") {
+          console.log("File Does not exist");
+          return false;
+        }else{
+          console.log("Some other error: " + err.message);
+          return false;
+        }
+      }else{
+        console.log(path + ': was deleted');
+        return true;
+      }
     });
   }, (1000 * 60 * 1));
 }
@@ -336,7 +345,7 @@ function copyLegacyTemplate(tempFileName) {
 function getData(filePath) {
   return new Promise(function(resolve, reject) {
     fs.readFile(filePath, 'utf8', function(err, data) {
-      console.log(filePath);
+      // console.log(filePath);
       if (!err) {
         // console.log(data);
         let parsedJSON = papa.parse(data);
@@ -412,20 +421,25 @@ function populateExcelData(fileName, addresses) {
     let i = 2;
     for (address of addresses) {
       let country = address.Country.toUpperCase();
-      let state = address.State.toUpperCase();
-      var row = worksheet.getRow(i);
-      row.getCell(1).value = address.Name;
-      row.getCell(2).value = address.Street;
-      row.getCell(3).value = address.City;
-      row.getCell(4).value = state;
-      row.getCell(6).value = (country.length > 3) ? country.split(" ")[0][0] + country.split(" ")[1][0] : country;
-      row.commit();
-      i++;
+      // console.log("countr: " + country);
+      if (country != "UNDEFINED"){
+        country = (country.length > 3) ? country.split(" ")[0][0] + country.split(" ")[1][0] : country;
+        let state = address.State.toUpperCase();
+        var row = worksheet.getRow(i);
+        row.getCell(1).value = address.Name;
+        row.getCell(2).value = address.Street;
+        row.getCell(3).value = address.City;
+        row.getCell(4).value = state;
+        row.getCell(6).value = country;
+        row.commit();
+        i++;
+        // console.log(JSON.stringify(address));
+      }
     }
     fs.mkdir("./tmp", (err) => {
       if (err) {
         // console.log(err.message);
-        console.log(err.code);
+        // console.log(err.code);
         if(err.code === "EEXIST"){
           console.log("Directory ALREADY Exists.");
           return workbook.xlsx.writeFile(tempFilePath + fileName);
@@ -433,7 +447,7 @@ function populateExcelData(fileName, addresses) {
           throw err;
         }
       }
-      console.log("Directory is created.");
+      console.log("'/tmp' Directory was created.");
       return workbook.xlsx.writeFile(tempFilePath + fileName);
     });
     // return workbook.xlsx.writeFile(tempFilePath + "legacyNew.xlsx");
