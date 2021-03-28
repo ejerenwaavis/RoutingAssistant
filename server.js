@@ -182,7 +182,7 @@ passport.use(new FacebookStrategy({
 passport.use(new GoogleStrategy({
     clientID: CLIENT_ID,
     clientSecret: CLIENT_SECRETE,
-    callbackURL: (SERVER)?"http://lsasistant.herokuapp.com/googleLoggedin":"/googleLoggedin",
+    callbackURL: (SERVER)?"https://lsasistant.herokuapp.com/googleLoggedin":"/googleLoggedin",
     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
   },
   function(accessToken, refreshToken, profile, cb) {
