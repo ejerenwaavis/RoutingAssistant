@@ -1,9 +1,20 @@
 require("dotenv").config();
 
+
 const CLIENT_ID = process.env.CLIENTID;
 const CLIENT_SECRETE = process.env.CLIENTSECRETE;
-const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID
-const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET
+
+const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID;
+const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
+
+const MONGOPASSWORD = process.env.MONGOPASSWORD;
+const MONGOUSER = process.env.MONGOUSER;
+const MONGOURI2 = process.env.MONGOURI2;
+
+
+const SALTROUNDS = 10;
+const SERVER = process.env.PORT;
+const SECRETE = process.env.SECRETE;
 
 
 
@@ -44,11 +55,190 @@ app.use(express.static("."));
 app.use(express.json());
 
 
+/******************** Authentication Setup & Config *************/
+//Authentication & Session Management Config
+app.use(session({
+  secret: SECRETE,
+  resave: false,
+  saveUninitialized: false,
+
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Mongoose Configuration and Setup
+const uri = "mongodb+srv://"+MONGOUSER+":" + MONGOPASSWORD + MONGOURI2;
+// console.log(uri);
+mongoose.connect(uri, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
+mongoose.set("useCreateIndex", true);
+
+
+const userSchema = new mongoose.Schema({
+  _id: String,
+  username: String,
+  firstName: String,
+  lastName: {type:String,default:""},
+  password: {type:String,default:""},
+  photoURL: String,
+  userHasPassword: {
+    type: Boolean,
+    default:false
+  },
+  verified: { type: Boolean, default: false },
+  isProUser:{ type: Boolean, default: false },
+  // isStylist:{ type: Boolean, default: false }
+});
+userSchema.plugin(passportLocalMongoose);
+const User = mongoose.model("User", userSchema);
+
+/********* Configure Passport **************/
+passport.use(User.createStrategy());
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+passport.deserializeUser(function(user, done) {
+  done(null, user);
+});
+
+//telling passprt to use local Strategy
+passport.use(new LocalStrategy(
+  function(username, password, done) {
+    // console.log("Finding user");
+    User.findOne({ _id: username }, function (err, user) {
+      // console.log("dons searching for user");
+      if (err) { console.log(err); return done(err); }
+      if (!user) {
+        console.log("incorrect User name");
+        return done(null, false, { message: 'Incorrect username.' });
+      }
+
+      bcrypt.compare(password, user.password, function(err, result) {
+        if(!err){
+          if(!result){
+            console.log("incorrect password");
+            return done(null, false, { message: 'Incorrect password.' });
+          }else{
+            return done(null, user);
+          }
+        }else{
+          // console.log("********some other error *************");
+          console.log(err);
+        }
+      });
+    });
+  }
+));
+
+
+//telling passport to use Facebook Strategy
+passport.use(new FacebookStrategy({
+    clientID: FACEBOOK_APP_ID,
+    clientSecret: FACEBOOK_APP_SECRET,
+    callbackURL: (SERVER)?"https://lsasistant.herokuapp.com/facebookLoggedin":"/facebookLoggedin",
+    enableProof: true,
+    profileFields: ["birthday", "email", "first_name", 'picture.type(large)', "last_name"]
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    let userProfile = profile._json;
+    // console.log("************ FB Profile *******");
+    // console.log(userProfile.picture.data.url);
+    User.findOne({ _id: userProfile.email }, function (err, user) {
+      if(!err){
+        if(user){
+          console.log("Logged in as ----> "+user._id);
+          return cb(err, user);
+        }else{
+          let newUser = new User({
+            _id: userProfile.email,
+            username: userProfile.email,
+            firstName: userProfile.first_name,
+            lastName: userProfile.last_name,
+            photoURL: userProfile.picture.data.url,
+          });
+
+          newUser.save()
+            .then(function() {
+              return cb(null,user);
+            })
+            .catch(function(err) {
+              console.log("failed to create user");
+              console.log(err);
+              return cb(new Error(err));
+            });
+        }
+      }else{
+          console.log("***********Internal error*************");
+          console.log(err);
+          return cb(new Error(err));
+      }
+    });
+  }
+));
+
+//telling passport to use GoogleStrategy
+passport.use(new GoogleStrategy({
+    clientID: CLIENT_ID,
+    clientSecret: CLIENT_SECRETE,
+    callbackURL: (SERVER)?"http://lsasistant.herokuapp.com/googleLoggedin":"/googleLoggedin",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    let userProfile = profile._json;
+    // console.log(userProfile);
+    User.findOne({
+      _id: userProfile.email
+    }, function(err, user) {
+      if (!err) {
+        // console.log("logged in");
+        if (user) {
+            console.log("Logged in as ----> "+user._id);
+            return cb(null, user)
+        } else {
+          console.log("user not found - creating new user");
+          let newUser = new User({
+            _id: userProfile.email,
+            username: userProfile.email,
+            firstName: userProfile.given_name,
+            lastName: userProfile.family_name,
+            photoURL: userProfile.picture
+          });
+
+          newUser.save()
+            .then(function() {
+              return cb(null,user);
+            })
+            .catch(function(err) {
+              console.log("failed to create user");
+              console.log(err);
+              return cb(new Error(err));
+            });
+        }
+      } else {
+        console.log("***********Internal error*************");
+        console.log(err);
+        return cb(new Error(err));
+      }
+    });
+  }
+));
+
+
+
 
 app.route("/")
   .get(function(req, res) {
     // print(tempFilePath);
-    res.render("home.ejs");
+    if(req.isAuthenticated()){
+      res.render("home.ejs", {
+        body:new Body("Home","",""),
+        user:req.user,
+      });
+    }else{
+      res.redirect("/login");
+    }
   })
 
 app.route("/fileUpload")
@@ -57,12 +247,14 @@ app.route("/fileUpload")
     form.parse(req, function(err, fields, files) {
       let upload = files.elicsv;
       let today = new Date;
-      let tempFileName = (today.toDateString()+ ' ' +today.getHours()+ '-' +today.getMinutes()+ ' USER_ID' + '.xlsx').replace(/ /g, "_");
+      let tempFileName = (today.toDateString()+ '_' +today.getHours()+ '-' +today.getMinutes()+" "+ req.user._id + '.xlsx').replace(/ /g, "_");
       getData(upload.path).then(function(addresses) {
         console.log("Records read: " + addresses.length);
         populateExcelData(tempFileName, addresses);
         res.render("excellDownload.ejs", {
-          filePath: tempFilePath + tempFileName
+          filePath: tempFilePath + tempFileName,
+          body:new Body("Download","",""),
+          user: req.user,
         });
       })
 
@@ -99,8 +291,10 @@ app.route("/login")
   })
   .post(function(req, res, next) {
     passport.authenticate('local', function(err, user, info) {
-      console.log(user);
-      // console.log(info);
+      // console.log(req.body.password);
+      // console.log(req.body.username);
+      console.log("logged in as ---> " + user._id);
+      // console.log(err);
       if (err) {
         return next(err);
       }
@@ -108,7 +302,8 @@ app.route("/login")
       if (!user) {
         return res.render('login', {
           body: new Body("Login", info.message, ""),
-          login: req.body.username
+          login: req.body.username,
+          user: null,
         });
       }
       req.logIn(user, function(err) {
@@ -141,8 +336,11 @@ app.route("/facebookLoggedin")
       }
       // Redirect if it fails
       if (!user) {
-        console.log(err);
-        return res.redirect('/login');
+        return res.render('login', {
+          body: new Body("Login", "", "Account Created successfully, Please log in again to continue"),
+          login: null,
+          user: req.user,
+        });
       }
       req.logIn(user, function(err) {
         if (err) {
@@ -173,7 +371,7 @@ app.route("/googleLoggedin")
           return next(err);
         }
         // Redirect if it succeeds
-        return res.redirect('/home');
+        return res.redirect('/');
       });
     })(req, res, next);
   });
@@ -182,24 +380,19 @@ app.route("/logout")
   .get(function(req, res) {
     req.logout();
     console.log("Logged Out");
-    // res.redirect("/");
-    res.render("home", {
-      body: new Body("Home", "", ""),
-      purchase: initialPurchase(),
-      user: null,
-    });
+    res.redirect("/");
+
   });
 
 app.route("/register")
   .get(function(req, res) {
     if (req.isAuthenticated()) {
       // console.log("Authenticated Request");
-      res.redirect("/home")
+      res.redirect("/")
     } else {
       // console.log("Unauthorized Access, Please Login");
       res.render("register", {
         body: new Body("Register", "", ""),
-        purchase: initialPurchase(),
         user: null,
       });
     }
@@ -207,18 +400,17 @@ app.route("/register")
   .post(function(req, res) {
     const user = new User({
       _id: req.body.username,
-      username: req.body.username,
-      phone: req.body.phone,
       firstName: req.body.firstName,
-      lastName: req.body.lastName,
       password: req.body.password,
-      // DoB: new Date(req.body.DoB).toLocaleString(),
       photoURL: "",
       userHasPassword: true,
-      verified: false,
     })
     let hahsPassword;
-    bcrypt.hash(req.body.password, SALTROUNDS, function(err, hash) {
+    // console.log(user.password);
+    // console.log(req.body.confirmPassword);
+    // console.log(user);
+    if(user.password === req.body.confirmPassword){
+      bcrypt.hash(req.body.password, SALTROUNDS, function(err, hash) {
       if (!err) {
         user.password = hash;
         // console.log(user);
@@ -226,12 +418,12 @@ app.route("/register")
           _id: user._id
         }, function(err, exists) {
           if (exists) {
-            res.render("/register", {
-              body: new Body("Register", "User email aready exists", ""),
-              purchase: initialPurchase(),
+            res.render("register", {
+              body: new Body("Register", "email is aready in use", ""),
               user: user,
             });
           } else {
+
             user.save(function(err, savedObj) {
               // console.log(err);
               if (!err) {
@@ -248,12 +440,16 @@ app.route("/register")
         // console.log(err);
         res.render("register", {
           body: new Body("Register", "Unable to complete registration (error: e-PWD)", ""),
-          purchase: initialPurchase(),
           user: user,
         });
       }
     });
-
+    }else{
+      res.render("register", {
+        body: new Body("Register", "Passwords do not match", ""),
+        user: user,
+      });
+    }
   })
 
 app.route("/usernameExist")
