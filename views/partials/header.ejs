@@ -12,10 +12,6 @@
   <link rel="canonical" href="https://getbootstrap.com/docs/5.0/examples/sign-in/">
 
 
-
-  <!-- Bootstrap core CSS -->
-  <link href="/docs/5.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6" crossorigin="anonymous">
-
   <style>
     .bd-placeholder-img {
       font-size: 1.125rem;
@@ -46,10 +42,26 @@
 </head>
 <body class="text-center">
 
-<%if(user){%>
-<div class="my-4 fixed-top">
-  <a href="/logout" class="btn btn-outline-secondary">
-    Log Out <i class="fas fa-sign-out-alt"></i>
-  </a>
-</div>
+<% if(body.title !== "Account"){%>
+  <%if(user){%>
+  <div class="my-4 fixed-top">
+    <a href="" class="btn btn-xs btn-outline-secondary dropdown-toggle"  role="button" id="profileMenu" data-bs-toggle="dropdown" aria-expanded="false">
+    <% if(user.photoURL){ %>
+      <img src=<%= user.photoURL %> alt="" class="profile-icon">
+    <% } else { %>
+      <div class="profile-icon bg-secondary">
+        <i class="fas fa-1x fa-user mt-2 text-white"></i>
+      </div>
+      <% } %>
+
+      <%= user.firstName %>
+    </a>
+    <ul class="dropdown-menu" aria-labelledby="dropdownMenuLink">
+      <li><a class="dropdown-item" href="/profile">Acount</a></li>
+       <li><a class="dropdown-item" href="/logout">Log Out <i class="fas fa-sign-out-alt"></i></a></li>
+     </ul>
+  </div>
+<%}%>
+<%} else {%>
+  <a href="/" class="btn btn-xs btn-outline-secondary "><i class="fas fa-home"></i> Home</a>
 <%}%>

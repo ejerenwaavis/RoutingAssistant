@@ -89,10 +89,11 @@ const userSchema = new mongoose.Schema({
   },
   verified: { type: Boolean, default: false },
   isProUser:{ type: Boolean, default: false },
-  // isStylist:{ type: Boolean, default: false }
+  renews:{ type: Date, default: new Date() },
+  usageCount:{ type: Number, default: 0 },
 });
 userSchema.plugin(passportLocalMongoose);
-const User = mongoose.model("User", userSchema);
+const User = mongoose.model("testUser", userSchema);
 
 /********* Configure Passport **************/
 passport.use(User.createStrategy());
@@ -271,6 +272,12 @@ app.route("/delete")
     res.sendStatus(200);
   })
 
+app.route("/profile")
+  .get(function(req,res){
+    if(req.isAuthenticated()){
+      res.render("profile", {user:req.user, body: new Body("Account","","")});
+    }
+  })
 
 
 
