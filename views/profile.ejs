@@ -27,7 +27,7 @@
             <h5 class="card-title mt-3 mb-0">Subsription</h5>
             <hr class="mt-1 mb-2">
             <p class="card-text d-inline-block mb-1"><small class="text-muted">Price: </small> <%=(user.isProUser)? "$5.99": "$0"%>/mo </p>
-            <p class="card-text  mb-1"><small class="text-muted">Status: </small> <%=(user.isProUser)?"Pro":"Basic" %>  </p>
+            <p class="card-text  mb-1"><small class="text-muted">Status: </small> <%=(user.isProUser)?"Pro":"Basic" %> </p>
             <p class="card-text "><small class="text-muted ">Quota Remaining: </small> <%=(user.isProUser)?"unlimited":10 - user.usageCount %> </p>
 
             <% if(!user.isProUser){ %>
@@ -45,13 +45,32 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                   </div>
                   <div class="modal-body">
-                    ...
+                    <div class="" id="proIntro">
+                      <div class="row justify-content-center">
+                        <div class="col-6">
+                          <p>Upgrading to Pro gives you access to:</p>
+                          <ul>
+                            <li>Unlimited Quota</li>
+                            <li>Handle more than 120 Stops</li>
+                          </ul>
+                        </div>
+                      </div>
+                      <div class="text-center">
+                        <h1 class="display-4 text-center">$7.99/mo</h1>
+                      </div>
+                    </div>
+
+                    <div class="text-center py-5" id="loading">
+                      <i class="text-secondary fas fa-3x fa-circle-notch fa-spin"></i>
+                    </div>
                   </div>
-                  <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary">Understood</button>
+
+                  <div class="modal-footer justify-content-center">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" onclick="startCheckout('prod_JL9S7yMBoTYZlw')" class="btn btn-primary">Proceed</button>
                   </div>
                 </div>
+
               </div>
             </div>
             <%}%>
@@ -70,6 +89,7 @@
 <!-- jQuery -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 <script src="js/script.js"></script>
+<script src="js/proUpgradeHandler.js"></script>
 
 </body>
 

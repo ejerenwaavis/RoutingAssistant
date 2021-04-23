@@ -15,6 +15,7 @@ const MONGOURI2 = process.env.MONGOURI2;
 const SALTROUNDS = 10;
 const SERVER = process.env.PORT;
 const SECRETE = process.env.SECRETE;
+const STRIPEAPI = process.env.STRIPEAPI;
 
 
 
@@ -32,7 +33,7 @@ const formidable = require('formidable');
 const mongoose = require("mongoose");
 const bcrypt = require('bcrypt');
 // const nodemailer = require('nodemailer');
-// const stripe = require("stripe")(STRIPEAPI);
+const stripe = require("stripe")(STRIPEAPI);
 
 const session = require("express-session");
 const passport = require('passport');
@@ -276,6 +277,8 @@ app.route("/profile")
   .get(function(req,res){
     if(req.isAuthenticated()){
       res.render("profile", {user:req.user, body: new Body("Account","","")});
+    }else{
+      res.redirect("/");
     }
   })
 
@@ -333,7 +336,8 @@ app.get('/auth/google', passport.authenticate('google', {
 
 app.get('/auth/facebook', passport.authenticate('facebook', {
   scope: 'email'
-}));
+}));4
+
 app.route("/facebookLoggedin")
   .get(function(req, res, next) {
     passport.authenticate('facebook', function(err, user, info) {
@@ -490,7 +494,42 @@ app.route("/deleteAccess")
   })
 
 
+/***************** Handling Payments  ********************/
+app.post('/create-checkout-session', async (req, res) => {
+  const { priceId } = req.body;
 
+  // See https://stripe.com/docs/api/checkout/sessions/create
+  // for additional parameters to pass.
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          // For metered billing, do not pass quantity
+          quantity: 1,
+        },
+      ],
+      // {CHECKOUT_SESSION_ID} is a string literal; do not change it!
+      // the actual Session ID is returned in the query parameter when your customer
+      // is redirected to the success page.
+      success_url: 'https://example.com/success.html?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: 'https://example.com/canceled.html',
+    });
+
+    res.send({
+      sessionId: session.id,
+    });
+  } catch (e) {
+    res.status(400);
+    return res.send({
+      error: {
+        message: e.message,
+      }
+    });
+  }
+});
 
 
 
@@ -555,10 +594,22 @@ function getData(filePath) {
         let arrayOfAddress = [];
         for (let i = 1; i < parsedJSON.data.length; i++) {
           let jsonAddress;
-          splitAddress = (parsedJSON.data[i][3] + "").split(".");
+          // splitAddress = (parsedJSON.data[i][ 3] + "").split(".");
+          tempSplitAddress = (parsedJSON.data[i][ 3] + "").split(".");
+          let splitAddress;
+          if(tempSplitAddress.includes(" US")){
+            splitAddress = tempSplitAddress;
+          }else{
+            tempSplitAddress.push(" US");
+            // console.log(tempSplitAddress);
+            splitAddress = tempSplitAddress;
+          }
+          // console.log(splitAddress.includes(" US"));
+          // console.log(splitAddress);
+
           if (splitAddress.length > 5) {
             jsonAddress = {
-              Name: splitAddress[0],
+              Name: ((splitAddress[0] + "").trim())?splitAddress[0]:"N/A" ,
               // apt:(splitAddress[1]+"").trim(),
               Street: (splitAddress[2] + "").trim() + ", " + (splitAddress[1] + "").trim(),
               City: (splitAddress[3] + "").trim(),
@@ -583,7 +634,7 @@ Column 'K' is missing its header: 'Lon''
 Column 'L' is missing its header: 'Service''
         */
             jsonAddress = {
-              Name: (splitAddress[0] + "").trim(),
+              Name: ((splitAddress[0] + "").trim())?splitAddress[0]:"N/A",
               Street: (splitAddress[1] + "").trim(),
               City: (splitAddress[2] + "").trim(),
               State: (splitAddress[3] + "").trim(),
@@ -604,7 +655,8 @@ Column 'L' is missing its header: 'Service''
           }
         }
         if (arrayOfAddress) {
-          // console.log("Data Processing Done . . . ");
+          console.log("Data Processing Done . . . ");
+          // console.log(arrayOfAddress);
           resolve(arrayOfAddress);
         } else {
           reject("Error Getting Data");
