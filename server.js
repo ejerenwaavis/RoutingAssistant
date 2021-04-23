@@ -595,7 +595,8 @@ function getData(filePath) {
         for (let i = 1; i < parsedJSON.data.length; i++) {
           let jsonAddress;
           // splitAddress = (parsedJSON.data[i][ 3] + "").split(".");
-          tempSplitAddress = (parsedJSON.data[i][ 3] + "").split(".");
+          if(parsedJSON.data[i][1] == "Loaded"){
+          tempSplitAddress = (parsedJSON.data[i][3] + "").split(".");
           let splitAddress;
           if(tempSplitAddress.includes(" US")){
             splitAddress = tempSplitAddress;
@@ -653,7 +654,10 @@ Column 'L' is missing its header: 'Service''
           if (jsonAddress.Name != "undefined") {
             arrayOfAddress.push(jsonAddress);
           }
+        }else{
+          console.log("already attempted/delivered");
         }
+      }
         if (arrayOfAddress) {
           console.log("Data Processing Done . . . ");
           // console.log(arrayOfAddress);
