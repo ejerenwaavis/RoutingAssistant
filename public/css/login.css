@@ -57,3 +57,12 @@ body {
   height: 2.2rem;
   border-radius: 50%;
 }
+
+.text-disabled{
+  color: #bcbcbc;
+}
+
+.stops{
+    height: 450px;
+    overflow-y: auto;
+}

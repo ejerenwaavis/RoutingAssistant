@@ -2,10 +2,50 @@
 
 
   <main class="form-signin">
-    <form action="/fileUpload" method="post" enctype="multipart/form-data">
+    <form id="fileUpload" action="/fileUpload" method="post" enctype="multipart/form-data">
       <!-- <img class="mb-4" src="/docs/5.0/assets/brand/bootstrap-logo.svg" alt="" width="72" height="57"> -->
-      <h1 class="h3 mb-2 fw-normal">Upload Eli.CSV</h1>
+      <h1 class="h3 mb-1 fw-normal">Upload Eli.CSV</h1>
       <p><small>upload the exported manifest <i class="fas fa-question"></i> </small></p>
+
+      <div class="pb-3 pt-3">
+        <h5 class=" fw-normal mb-1 pb-0">Select stops to extract</h5>
+        <div class="d-inline-block me-2">
+          <input class="form-check-input" type="checkbox" name="loaded" value=true id="loaded" checked>
+          <label class="form-check-label" for="loaded">
+            Scanned
+          </label>
+        </div>
+        <div class=" d-inline-block me-2">
+          <input class="form-check-input" type="checkbox" name="attempted" value=true id="attempted">
+          <label class="form-check-label" for="attempted">
+            Attempts
+          </label>
+        </div>
+        <!-- <div class=" d-inline me-2">
+          <input class="form-check-input" type="checkbox" value="" id="onDriver">
+          <label class="form-check-label" for="onDriver">
+            On Driver
+          </label>
+        </div> -->
+      </div>
+
+
+      <div class="pb-5">
+        <h5 class=" fw-normal mb-1 pb-0">Extract for ?</h5>
+        <div class="d-inline-block me-2">
+        <input class="form-check-input" type="radio" name="extractFor" value="roadWarrior" id="export1" checked>
+        <label class="form-check-label" for="export1">
+          Road Warrior Upload
+        </label>
+      </div>
+      <div class="d-inline-block me-2">
+        <input class="form-check-input" type="radio" name="extractFor" value="print" id="export2" >
+        <label class="form-check-label" for="export2">
+          Printing
+        </label>
+      </div>
+      </div>
+
         <label for="inputEmail" class="visually-hidden">Choose File</label>
         <div class="form-group mb-3">
         <input type="file" id="elicsv" name="elicsv" class="form-control" placeholder="elicsv" required autofocus>

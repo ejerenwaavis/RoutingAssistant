@@ -6,6 +6,7 @@ const CLIENT_SECRETE = process.env.CLIENTSECRETE;
 
 const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID;
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
+const HEREAPI = process.env.HEREAPI;
 
 const MONGOPASSWORD = process.env.MONGOPASSWORD;
 const MONGOUSER = process.env.MONGOUSER;
@@ -230,6 +231,9 @@ passport.use(new GoogleStrategy({
 
 
 
+
+/***********************BUSINESS LOGIC ************************************/
+
 app.route("/")
   .get(function(req, res) {
     // print(tempFilePath);
@@ -245,23 +249,49 @@ app.route("/")
 
 app.route("/fileUpload")
   .post(function(req, res) {
+    if(req.isAuthenticated()){
     var form = new formidable.IncomingForm();
     form.parse(req, function(err, fields, files) {
       let upload = files.elicsv;
+      let loaded = (fields.loaded)?"Loaded":false;
+      let attempted = (fields.attempted)?"Attempted":false;
+      let extractFor = fields.extractFor;
+
       let today = new Date;
-      let tempFileName = (today.toDateString()+ '_' +today.getHours()+ '-' +today.getMinutes()+" "+ req.user._id + '.xlsx').replace(/ /g, "_");
-      getData(upload.path).then(function(addresses) {
-        console.log("Records read: " + addresses.length);
-        populateExcelData(tempFileName, addresses);
-        res.render("excellDownload.ejs", {
-          filePath: tempFilePath + tempFileName,
-          body:new Body("Download","",""),
-          user: req.user,
-        });
-      })
+
+      if(extractFor === "roadWarrior"){
+        let tempFileName = (today.toDateString()+ '_' +today.getHours()+ '-' +today.getMinutes()+" "+ req.user._id + '.xlsx').replace(/ /g, "_");
+        getData(upload.path, {loaded:loaded, attempted:attempted, extractFor:extractFor}).then(function(addresses) {
+          console.log("Records read: " + addresses.length);
+          populateExcelData(tempFileName, addresses);
+          res.render("excellDownload.ejs", {
+            filePath: tempFilePath + tempFileName,
+            body:new Body("Download","",""),
+            user: req.user,
+          });
+        })
+      }else {
+        let tempFileName = (today.toDateString()+ '_' +today.getHours()+ '-' +today.getMinutes()+" -PRINT- "+ req.user._id + '.xlsx').replace(/ /g, "_");
+        // console.log("extract for print");
+        getDataForPrint(upload.path, {loaded:loaded, attempted:attempted, extractFor:extractFor}).then(function(addresses) {
+          let userName = req.user.firstName + " " + req.user.lastName;
+          console.log("Records read: " + addresses.length);
+          // console.log(addresses);
+          // console.log(userName);
+          populateExcelDataForPrint(tempFileName, addresses, userName);
+          res.render("stopDisplay.ejs", {
+            filePath: tempFilePath + tempFileName,
+            body:new Body("Pick First Stop","",""),
+            addresses:addresses,
+            user: req.user,
+          });
+        })
+      }
 
     });
-
+  }else{
+    res.redirect("/");
+  }
   })
 
 
@@ -493,6 +523,14 @@ app.route("/deleteAccess")
     })
   })
 
+app.get("/hereApiKey", function(req,res){
+    if(req.isAuthenticated()){
+      res.send(HEREAPI);
+    }else{
+      res.send("89EWE^567AMEDR4138%^#MAN@%^#J");
+    }
+})
+
 
 /***************** Handling Payments  ********************/
 app.post('/create-checkout-session', async (req, res) => {
@@ -584,46 +622,47 @@ function copyLegacyTemplate(tempFileName) {
 }
 
 // promise that returns an array of JSON Addresses {customerName, address, apt(if any:ste,apt), city,state, country};
-function getData(filePath) {
+function getData(filePath, options) {
   return new Promise(function(resolve, reject) {
     fs.readFile(filePath, 'utf8', function(err, data) {
-      // console.log(filePath);
+      // console.log(options);
       if (!err) {
         // console.log(data);
         let parsedJSON = papa.parse(data);
         let arrayOfAddress = [];
         for (let i = 1; i < parsedJSON.data.length; i++) {
           let jsonAddress;
-          // splitAddress = (parsedJSON.data[i][ 3] + "").split(".");
-          if(parsedJSON.data[i][1] == "Loaded"){
-          tempSplitAddress = (parsedJSON.data[i][3] + "").split(".");
-          let splitAddress;
-          if(tempSplitAddress.includes(" US")){
-            splitAddress = tempSplitAddress;
-          }else{
-            tempSplitAddress.push(" US");
-            // console.log(tempSplitAddress);
-            splitAddress = tempSplitAddress;
-          }
-          // console.log(splitAddress.includes(" US"));
-          // console.log(splitAddress);
-
-          if (splitAddress.length > 5) {
-            jsonAddress = {
-              Name: ((splitAddress[0] + "").trim())?splitAddress[0]:"N/A" ,
-              // apt:(splitAddress[1]+"").trim(),
-              Street: (splitAddress[2] + "").trim() + ", " + (splitAddress[1] + "").trim(),
-              City: (splitAddress[3] + "").trim(),
-              State: (splitAddress[4] + "").trim(),
-              Postal: "",
-              Country: (splitAddress[5] + "").trim(),
-              'Color (0-1)': "",
-              Phone: "",
-              Note: "",
-              Latitude: "",
-              Longitude: "",
-              'Service Time': "",
+          if(parsedJSON.data[i][1] === options.loaded || parsedJSON.data[i][1] === options.attempted){
+            // console.log(parsedJSON.data[i][1]);
+            // console.log(options);
+            tempSplitAddress = (parsedJSON.data[i][3] + "").split(".");
+            let splitAddress;
+            if(tempSplitAddress.includes(" US")){
+              splitAddress = tempSplitAddress;
+            }else{
+              tempSplitAddress.push(" US");
+              // console.log(tempSplitAddress);
+              splitAddress = tempSplitAddress;
             }
+            // console.log(splitAddress.includes(" US"));
+            // console.log(splitAddress);
+
+            if (splitAddress.length > 5) {
+              jsonAddress = {
+                Name: ((splitAddress[0] + "").trim())?splitAddress[0]:"N/A" ,
+                // apt:(splitAddress[1]+"").trim(),
+                Street: (splitAddress[2] + "").trim() + ", " + (splitAddress[1] + "").trim(),
+                City: (splitAddress[3] + "").trim(),
+                State: (splitAddress[4] + "").trim(),
+                Postal: "",
+                Country: (splitAddress[5] + "").trim(),
+                'Color (0-1)': "",
+                Phone: "",
+                Note: "",
+                Latitude: "",
+                Longitude: "",
+                'Service Time': "",
+              }
           } else {
             /*
         Header Errors:
@@ -651,13 +690,14 @@ Column 'L' is missing its header: 'Service''
             }
           }
           // console.log(jsonAddress.Name);
-          if (jsonAddress.Name != "undefined") {
+          if (jsonAddress.Name != "undefined" && jsonAddress.Name != " Unknown name") {
             arrayOfAddress.push(jsonAddress);
           }
         }else{
-          console.log("already attempted/delivered");
+          // console.log("already attempted/delivered");
         }
       }
+
         if (arrayOfAddress) {
           console.log("Data Processing Done . . . ");
           // console.log(arrayOfAddress);
@@ -671,6 +711,75 @@ Column 'L' is missing its header: 'Service''
     });
   });
 }
+
+function getDataForPrint(filePath, options) {
+  return new Promise(function(resolve, reject) {
+    fs.readFile(filePath, 'utf8', function(err, data) {
+      // console.log(options);
+      if (!err) {
+        // console.log(data);
+        let parsedJSON = papa.parse(data);
+        let arrayOfAddress = [];
+        for (let i = 1; i < parsedJSON.data.length; i++) {
+          let jsonAddress;
+          if(parsedJSON.data[i][1] === options.loaded || parsedJSON.data[i][1] === options.attempted ){
+            // console.log(parsedJSON.data[i][1]);
+            // console.log(options);
+            tempSplitAddress = (parsedJSON.data[i][3] + "").split(".");
+            let splitAddress;
+            if(tempSplitAddress.includes(" US")){
+              splitAddress = tempSplitAddress;
+            }else{
+              tempSplitAddress.push(" US");
+              // console.log(tempSplitAddress);
+              splitAddress = tempSplitAddress;
+            }
+            // console.log(splitAddress.includes(" US"));
+            // console.log(splitAddress);
+
+            if (splitAddress.length > 5) {
+              jsonAddress = {
+                Name: ((splitAddress[0] + "").trim())?splitAddress[0]:"N/A" ,
+                // apt:(splitAddress[1]+"").trim(),
+                Street: (splitAddress[2] + "").trim() + ", " + (splitAddress[1] + "").trim(),
+                City: (splitAddress[3] + "").trim(),
+                State: (splitAddress[4] + "").trim(),
+                Barcode: parsedJSON.data[i][0].trim()
+              }
+          } else {
+
+            jsonAddress = {
+              Name: ((splitAddress[0] + "").trim())?splitAddress[0]:"N/A",
+              Street: (splitAddress[1] + "").trim(),
+              City: (splitAddress[2] + "").trim(),
+              State: (splitAddress[3] + "").trim(),
+              Barcode: parsedJSON.data[i][0].trim()
+
+            }
+          }
+          // console.log(jsonAddress.Name);
+          if (jsonAddress.Name != "undefined" && jsonAddress.Name != " Unknown name") {
+            arrayOfAddress.push(jsonAddress);
+          }
+        }else{
+          // console.log("already attempted/delivered");
+        }
+      }
+
+        if (arrayOfAddress) {
+          console.log("Data Processing Done . . . ");
+          // console.log(arrayOfAddress);
+          resolve(arrayOfAddress);
+        } else {
+          reject("Error Getting Data");
+        }
+      } else {
+        console.log("something happened");
+      }
+    });
+  });
+}
+
 
 function populateExcelData(fileName, addresses) {
   var workbook = new Excel.Workbook();
@@ -690,6 +799,48 @@ function populateExcelData(fileName, addresses) {
         row.getCell(3).value = address.City;
         row.getCell(4).value = state;
         row.getCell(6).value = country;
+        row.commit();
+        i++;
+        // console.log(JSON.stringify(address));
+      }
+    }
+    fs.mkdir("./tmp", (err) => {
+      if (err) {
+        // console.log(err.message);
+        // console.log(err.code);
+        if(err.code === "EEXIST"){
+          console.log("Directory ALREADY Exists.");
+          return workbook.xlsx.writeFile(tempFilePath + fileName);
+        }else{
+          throw err;
+        }
+      }
+      console.log("'/tmp' Directory was created.");
+      return workbook.xlsx.writeFile(tempFilePath + fileName);
+    });
+    // return workbook.xlsx.writeFile(tempFilePath + "legacyNew.xlsx");
+  })
+}
+
+function populateExcelDataForPrint(fileName, addresses, userName) {
+  var workbook = new Excel.Workbook();
+
+  workbook.xlsx.readFile("original/print.xlsx").then(function() {
+    var worksheet = workbook.getWorksheet(1);
+    var row = worksheet.getRow(1);
+    row.getCell(2).value = userName;
+    row.getCell(5).value = "Packages: "+addresses.length;
+    row.commit();
+    let i = 3;
+    for (address of addresses) {
+      if (address.Barcode != "UNDEFINED"){
+        let state = address.State.toUpperCase();
+        var row = worksheet.getRow(i);
+        row.getCell(1).value = address.Name;
+        row.getCell(2).value = address.Street;
+        row.getCell(3).value = address.City;
+        row.getCell(4).value = state;
+        row.getCell(5).value = address.Barcode;
         row.commit();
         i++;
         // console.log(JSON.stringify(address));
