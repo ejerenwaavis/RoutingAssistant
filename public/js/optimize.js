@@ -5,31 +5,58 @@ function optimize(evt) {
   $.get("/hereApiKey", function(res) {
     hereApiKey = res;
 
-    gecocodeStops(stops).then(function(newStops) {
+  timedGeoCodeStops(stops).then(function(newStops){
       console.log(newStops);
-      console.log("___________________________________");
     });
-
   })
 }
 
+async function timedGeoCodeStops(stops){
+  var newStops = [];
+  for(stop of stops){
+    var address = stop.Street + ", " + stop.City;
+    await new Promise(function(resolve,reject){
+    	setTimeout(function(){
+      	resolve();},200)}); // causes a 220 milisecond pause
+    $.get("https://geocode.search.hereapi.com/v1/geocode?q=" + address + "&apiKey=14nO-3bBvP2yuJ6ShZ05VbEs37DXUVENPrO_K_K-Pmo", function(response) {
 
+/****** MAtch street adress of stop with response before assigning the GeoCodes */
+      if (response.items[0]) {
+        // console.log(stop);
+        // console.log("GeoSearch Response: ____0_____");
+        console.log(response.items[0]);
+    // console.log(response.items[0].position);
+    // stop.position = response.items[0].position;
+        // console.log("New Stop b4 Addidtion _________");
+  // newStops.push(stop);
+        // console.log(i);
+        // console.log(stop);
+      } else {
+        console.log("Error");
+        console.log(response);
+      }
+    });
+  }
+  return newStops;
+}
 
 function gecocodeStops(stops) {
   return new Promise(function(resolve, reject) {
     // console.log(stops);
-    let newStops = [];
+    var newStops = [];
     let c = 0;
     for (let i = 0; i < stops.length; i++) {
-      var stop = stops[i];
-      var address = stop.Street + ", " + stop.City;
-      // console.log("inside for Loop --> "+address);
       setTimeout(function() {
+        let stop = stops[i];
+        var address = stop.Street + ", " + stop.City;
+        console.log("inside for Loop --> "+address);
         $.get("https://geocode.search.hereapi.com/v1/geocode?q=" + address + "&apiKey=14nO-3bBvP2yuJ6ShZ05VbEs37DXUVENPrO_K_K-Pmo", function(response) {
           if (response) {
-            // console.log(response);
+            console.log("GeoSearch Response: _________");
+            console.log(response.items[0].position);
             stop.position = response.items[0].position;
-
+            console.log("New Stop b4 Addidtion _________");
+            console.log(stop);
             newStops.push(stop);
             // console.log(i);
             // console.log(stop);
