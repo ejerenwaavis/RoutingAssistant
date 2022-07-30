@@ -259,32 +259,27 @@ app.route("/fileUpload")
 
         let today = new Date;
 
-        if (extractFor === "roadWarrior") {
-          let tempFileName = ('RW -' + today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " " + req.user._id + '.xlsx').replace(/ /g, "_");
+        if (extractFor != "print") {
+          let fileNamePrefix = (extractFor === "roadWarrior")? "RW - ":"R4M - ";
+          let tempFileName = (fileNamePrefix + today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " " + req.user._id + '.xlsx').replace(/ /g, "_");
           getData(upload.path, { loaded: loaded, attempted: attempted, extractFor: extractFor }).then(function (addresses) {
             console.log("Records read: " + addresses.length);
-            populateExcelData(tempFileName, addresses);
+            if (extractFor === "roadWarrior"){
+              console.log("running for ROAD WARIOR");
+              populateExcelData(tempFileName, addresses);
+            }else{
+              console.log("running for ROUTE 4 ME");
+              populateExcelDataRoute4Me(tempFileName, addresses);
+            }
             res.render("excellDownload.ejs", {
               filePath: tempFilePath + tempFileName,
               body: new Body("Download", "", ""),
               user: req.user,
             });
           })
-        } else if (extractFor === "route4me") {
-          console.log("Route4Me Process Began");
-          // extract the data
-          let tempFileName = ('R4M -' +today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " " + req.user._id + '.xlsx').replace(/ /g, "_");
-          getData(upload.path, { loaded: loaded, attempted: attempted, extractFor: extractFor }).then(function (addresses) {
-            console.log("Records read: " + addresses.length);
-            populateExcelDataRoute4Me(tempFileName, addresses);
-            res.render("excellDownload.ejs", {
-              filePath: tempFilePath + tempFileName,
-              body: new Body("Download", "", ""),
-              user: req.user,
-            });
-          })
-          // store them in a temp an excell tempfile
-        } else {
+        } 
+  
+        else {
           let tempFileName = (today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " -PRINT- " + req.user._id + '.xlsx').replace(/ /g, "_");
           // console.log("extract for print");
           getDataForPrint(upload.path, { loaded: loaded, attempted: attempted, extractFor: extractFor }).then(function (addresses) {
@@ -703,30 +698,7 @@ function getData(filePath, options) {
 
                 }
               }
-            } else {
-              console.log("now extracting for r4me");
-              // if (splitAddress.length > 5) {
-              //   jsonAddress = {
-              //     Name: ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
-              //     // apt:(splitAddress[1]+"").trim(),
-              //     Street: (splitAddress[2] + "").trim() + ", " + (splitAddress[1] + "").trim(),
-              //     City: (splitAddress[3] + "").trim(),
-              //     State: (splitAddress[4] + "").trim(),
-              //     Postal: "",
-              //     Country: (splitAddress[5] + "").trim(),
-              //   }
-              // } else {
-              //   jsonAddress = {
-              //     Name: ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
-              //     Street: (splitAddress[1] + "").trim(),
-              //     City: (splitAddress[2] + "").trim(),
-              //     State: (splitAddress[3] + "").trim(),
-              //     Postal: "",
-              //     Country: (splitAddress[4] + "").trim(),
-              //   }
-              // }
-
-            }
+            } 
             // console.log(jsonAddress.Name);
             if (jsonAddress.Name != "undefined" && jsonAddress.Name != " Unknown name") {
               arrayOfAddress.push(jsonAddress);
@@ -751,7 +723,7 @@ function getData(filePath, options) {
 }
 
 
-/************************************************************/
+
 
 function getDataForPrint(filePath, options) {
   return new Promise(function (resolve, reject) {
