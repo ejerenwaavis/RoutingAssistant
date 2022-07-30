@@ -6,6 +6,7 @@ $(function(){
 function deleteFile(path){
   $.post("/delete", {path:path}, function(status){
     if(200){
+      if(!path.includes('R4M'))
       $("#roadWarrioirLink").fadeIn("fast").fadeOut("fast").fadeIn("slow");
       return console.log("sucessfull registered deletion");
     }
