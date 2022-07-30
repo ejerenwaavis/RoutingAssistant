@@ -255,6 +255,7 @@ app.route("/fileUpload")
         let upload = files.elicsv;
         let loaded = (fields.loaded) ? "Loaded" : false;
         let attempted = (fields.attempted) ? "Attempted" : false;
+        let delivered = (fields.delivered) ? "Delivered" : false;
         let extractFor = fields.extractFor;
 
         let today = new Date;
@@ -641,7 +642,7 @@ function getData(filePath, options) {
         let arrayOfAddress = [];
         for (let i = 1; i < parsedJSON.data.length; i++) {
           let jsonAddress;
-          if (parsedJSON.data[i][1] === options.loaded || parsedJSON.data[i][1] === options.attempted) {
+          if (parsedJSON.data[i][1] === options.loaded || parsedJSON.data[i][1] === options.attempted || parsedJSON.data[i][1] === options.delivered) {
             // console.log(parsedJSON.data[i][1]);
             // console.log(options);
             tempSplitAddress = (parsedJSON.data[i][3] + "").split(".");
