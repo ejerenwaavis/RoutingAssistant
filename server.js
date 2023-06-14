@@ -54,7 +54,7 @@ app.use(bodyParser.urlencoded({
   extended: true
 }));
 app.use(express.static("public"));
-app.use(express.static("tmp"));
+app.use('/tmp', express.static("tmp"));
 app.use(express.static("."));
 app.use(express.json());
 
@@ -150,8 +150,7 @@ passport.use(new LocalStrategy(
 passport.use(new FacebookStrategy({
   clientID: FACEBOOK_APP_ID,
   clientSecret: FACEBOOK_APP_SECRET,
-  callbackURL: (SERVER) ? "https://lsasistant.herokuapp.com/facebookLoggedin" : "/facebookLoggedin",
-  enableProof: true,
+  callbackURL: (SERVER) ? "https://triumphcourier.com"+ APP_DIRECTORY+ "/facebookLoggedin" : APP_DIRECTORY + "/facebookLoggedin",  enableProof: true,
   profileFields: ["birthday", "email", "first_name", 'picture.type(large)', "last_name"]
 },
   function (accessToken, refreshToken, profile, cb) {
@@ -195,7 +194,7 @@ passport.use(new FacebookStrategy({
 passport.use(new GoogleStrategy({
   clientID: CLIENT_ID,
   clientSecret: CLIENT_SECRETE,
-  callbackURL: (SERVER) ? "https://triumphcourier.com/"+ APP_DIRECTORY+"/googleLoggedin" : APP_DIRECTORY + "/googleLoggedin",
+  callbackURL: (SERVER) ? "https://triumphcourier.com"+ APP_DIRECTORY+"/googleLoggedin" : APP_DIRECTORY + "/googleLoggedin",
   userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
 },
   function (accessToken, refreshToken, profile, cb) {
