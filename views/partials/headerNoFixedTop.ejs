@@ -8,6 +8,8 @@
   <meta name="generator" content="Hugo 0.82.0">
   <title><%=body.title%> · LS Asistant</title>
 
+  <!-- Favicon -->
+  <link rel="icon" href="<%= body.publicFolder %>img/Logo-SVG.svg">
 
 
   <style>
@@ -37,7 +39,7 @@
 
 
   <!-- Custom styles for this template -->
-  <link href="css/login.css" rel="stylesheet">
+  <link href="<%= body.publicFolder %>css/login.css" rel="stylesheet">
 
 </head>
 <body class="text-center">
@@ -57,11 +59,16 @@
       <%= user.firstName %>
     </a>
     <ul class="dropdown-menu" aria-labelledby="dropdownMenuLink">
-      <li><a class="dropdown-item" href="/profile">Acount</a></li>
-       <li><a class="dropdown-item" href="/logout">Log Out <i class="fas fa-sign-out-alt"></i></a></li>
+      <li><a class="dropdown-item" href="<%= body.domain %>/profile">Acount</a></li>
+       <li><a class="dropdown-item" href="<%= body.domain %>/logout">Log Out <i class="fas fa-sign-out-alt"></i></a></li>
      </ul>
   </div>
 <%}%>
 <%} else {%>
-  <a href="/" class="btn btn-xs btn-outline-secondary "><i class="fas fa-home"></i> Home</a>
+  <a href="<%= body.domain %>/" class="btn btn-xs btn-outline-secondary "><i class="fas fa-home"></i> Home</a>
 <%}%>
+
+
+    <!-- *******************DOMAIN HANDLING*************************** -->
+    <span class="d-none" id="domain" domain="<%= body.domain %>">
+    </span>

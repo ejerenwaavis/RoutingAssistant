@@ -14,10 +14,12 @@ const MONGOURI2 = process.env.MONGOURI2;
 
 
 const SALTROUNDS = 10;
-const SERVER = process.env.PORT;
+const SERVER = !(process.execPath.includes("C:"));//process.env.PORT;
 const SECRETE = process.env.SECRETE;
 const STRIPEAPI = process.env.STRIPEAPI;
 
+const APP_DIRECTORY = process.env.APP_DIRECTORY;
+const PUBLIC_FOLDER = (SERVER) ? "./" : "../";
 
 
 const tempFilePath = 'tmp/';
@@ -193,7 +195,7 @@ passport.use(new FacebookStrategy({
 passport.use(new GoogleStrategy({
   clientID: CLIENT_ID,
   clientSecret: CLIENT_SECRETE,
-  callbackURL: (SERVER) ? "https://lsasistant.herokuapp.com/googleLoggedin" : "/googleLoggedin",
+  callbackURL: (SERVER) ? "https://triumphcourier.com/"+ APP_DIRECTORY+"/googleLoggedin" : APP_DIRECTORY + "/googleLoggedin",
   userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
 },
   function (accessToken, refreshToken, profile, cb) {
@@ -242,7 +244,7 @@ passport.use(new GoogleStrategy({
 
 /***********************BUSINESS LOGIC ************************************/
 
-app.route("/")
+app.route(APP_DIRECTORY + "/")
   .get(function (req, res) {
     // print(tempFilePath);
     if (req.isAuthenticated()) {
@@ -251,11 +253,11 @@ app.route("/")
         user: req.user,
       });
     } else {
-      res.redirect("/login");
+      res.redirect(APP_DIRECTORY + "/login");
     }
   })
 
-app.route("/fileUpload")
+app.route(APP_DIRECTORY + "/fileUpload")
   .post(function (req, res) {
     if (req.isAuthenticated()) {
       var form = new formidable.IncomingForm();
@@ -281,7 +283,7 @@ app.route("/fileUpload")
               populateExcelDataRoute4Me(tempFileName, addresses);
             }
             res.render("excellDownload.ejs", {
-              filePath: tempFilePath + tempFileName,
+              filePath: tempFilePath  + tempFileName,
               body: new Body("Download", "", ""),
               user: req.user,
             });
@@ -298,7 +300,7 @@ app.route("/fileUpload")
             // console.log(userName);
             populateExcelDataForPrint(tempFileName, addresses, userName);
             res.render("stopDisplay.ejs", {
-              filePath: tempFilePath + tempFileName,
+              filePath:  tempFilePath + tempFileName,
               body: new Body("Pick First Stop", "", ""),
               addresses: addresses,
               user: req.user,
@@ -308,11 +310,11 @@ app.route("/fileUpload")
 
       });
     } else {
-      res.redirect("/");
+      res.redirect(APP_DIRECTORY + "/");
     }
   })
 
-app.route("/brandsFileUpload")
+app.route(APP_DIRECTORY + "/brandsFileUpload")
   .get(function (req, res){
     if (req.isAuthenticated()) {
       res.render("brandCapture.ejs", {
@@ -323,7 +325,7 @@ app.route("/brandsFileUpload")
       });
     }else{
       console.log("Unauthenticated Request ");
-      res.redirect("/");
+      res.redirect(APP_DIRECTORY + "/");
     }
   })
   .post(function (req, res) {
@@ -399,20 +401,20 @@ app.route("/brandsFileUpload")
 
             
           }else{
-            res.redirect("/");
+            res.redirect(APP_DIRECTORY + "/");
           }
         });
       });
     }else{
       console.log("Unauthenticated Request ");
-      res.redirect("/");
+      res.redirect(APP_DIRECTORY + "/");
     }
   });
 
 
 
 
-app.route("/delete")
+app.route(APP_DIRECTORY + "/delete")
   .post(function (req, res) {
     let path = req.body.path;
     console.log("File to be deleted: " + path);
@@ -420,23 +422,23 @@ app.route("/delete")
     res.sendStatus(200);
   })
 
-app.route("/profile")
+app.route(APP_DIRECTORY + "/profile")
   .get(function (req, res) {
     if (req.isAuthenticated()) {
       res.render("profile", { user: req.user, body: new Body("Account", "", "") });
     } else {
-      res.redirect("/");
+      res.redirect(APP_DIRECTORY + "/");
     }
   })
 
 
 
 /****************** Authentication *******************/
-app.route("/login")
+app.route(APP_DIRECTORY + "/login")
   .get(function (req, res) {
     if (req.isAuthenticated()) {
       // console.log("Authenticated Request");
-      res.redirect("/")
+      res.redirect(APP_DIRECTORY + "/")
     } else {
       // console.log("Unauthorized Access, Please Login");
       res.render("login", {
@@ -468,12 +470,12 @@ app.route("/login")
           return next(err);
         }
         // Redirect if it succeeds
-        return res.redirect('/');
+        return res.redirect(APP_DIRECTORY + '/');
       });
     })(req, res, next);
   });
 
-app.get('/auth/google', passport.authenticate('google', {
+app.get(APP_DIRECTORY + '/auth/google', passport.authenticate('google', {
   // scope: ['profile']
   scope: [
     'https://www.googleapis.com/auth/userinfo.profile',
@@ -481,11 +483,11 @@ app.get('/auth/google', passport.authenticate('google', {
   ]
 }));
 
-app.get('/auth/facebook', passport.authenticate('facebook', {
+app.get(APP_DIRECTORY + '/auth/facebook', passport.authenticate('facebook', {
   scope: 'email'
 })); 4
 
-app.route("/facebookLoggedin")
+app.route(APP_DIRECTORY + "/facebookLoggedin")
   .get(function (req, res, next) {
     passport.authenticate('facebook', function (err, user, info) {
       if (err) {
@@ -505,12 +507,12 @@ app.route("/facebookLoggedin")
           return next(err);
         }
         // Redirect if it succeeds
-        return res.redirect('/');
+        return res.redirect(APP_DIRECTORY + '/');
       });
     })(req, res, next);
   });
 
-app.route("/googleLoggedin")
+app.route(APP_DIRECTORY + "/googleLoggedin")
   .get(function (req, res, next) {
     passport.authenticate('google', function (err, user, info) {
       if (err) {
@@ -529,24 +531,24 @@ app.route("/googleLoggedin")
           return next(err);
         }
         // Redirect if it succeeds
-        return res.redirect('/');
+        return res.redirect(APP_DIRECTORY + '/');
       });
     })(req, res, next);
   });
 
-app.route("/logout")
+app.route(APP_DIRECTORY + "/logout")
   .get(function (req, res) {
     req.logout();
     console.log("Logged Out");
-    res.redirect("/");
+    res.redirect(APP_DIRECTORY + "/");
 
   });
 
-app.route("/register")
+app.route(APP_DIRECTORY + "/register")
   .get(function (req, res) {
     if (req.isAuthenticated()) {
       // console.log("Authenticated Request");
-      res.redirect("/")
+      res.redirect(APP_DIRECTORY + "/")
     } else {
       // console.log("Unauthorized Access, Please Login");
       res.render("register", {
@@ -586,7 +588,7 @@ app.route("/register")
                 // console.log(err);
                 if (!err) {
                   // console.log(savedObj);
-                  res.redirect("/login");
+                  res.redirect(APP_DIRECTORY + "/login");
                 } else {
 
                 }
@@ -610,7 +612,7 @@ app.route("/register")
     }
   })
 
-app.route("/usernameExist")
+app.route(APP_DIRECTORY + "/usernameExist")
   .post(function (req, res) {
     // console.log("username to search ---> "+req.body.username);
     User.exists({
@@ -620,7 +622,7 @@ app.route("/usernameExist")
     })
   })
 
-app.route("/deleteAccess")
+app.route(APP_DIRECTORY + "/deleteAccess")
   .get(function (req, res) {
     let provider = req.params.provider;
     if (provider === provider) {
@@ -636,11 +638,11 @@ app.route("/deleteAccess")
     }, function (err, deleted) {
       console.log(err);
       console.log(deleted);
-      res.redirect("/logout")
+      res.redirect(APP_DIRECTORY + "/logout")
     })
   })
 
-app.get("/hereApiKey", function (req, res) {
+app.get(APP_DIRECTORY + "/hereApiKey", function (req, res) {
   if (req.isAuthenticated()) {
     res.send(HEREAPI);
   } else {
@@ -650,7 +652,7 @@ app.get("/hereApiKey", function (req, res) {
 
 
 /***************** Handling Payments  ********************/
-app.post('/create-checkout-session', async (req, res) => {
+app.post(APP_DIRECTORY + '/create-checkout-session', async (req, res) => {
   const { priceId } = req.body;
 
   // See https://stripe.com/docs/api/checkout/sessions/create
@@ -730,6 +732,7 @@ function copyLegacyTemplate(tempFileName) {
   return new Promise(function (resolve, reject) {
     fs.copyFile('./original/new.xlsx', tempFilePath + tempFileName, function (err) {
       if (err) {
+        console.log("unable to copy file");
         reject(null);
         throw err;
       }
@@ -818,7 +821,7 @@ function getData(filePath, options) {
 
         if (arrayOfAddress) {
           console.log("Data Processing Done . . . ");
-          // console.log(arrayOfAddress);
+          console.log(arrayOfAddress);
           resolve(arrayOfAddress);
         } else {
           reject("Error Getting Data");
@@ -881,9 +884,9 @@ function getBrandsFromExcelDocument(filePath) {
         console.log("Brand Array = " + brands.length);
         // console.log( brands);
         resolve(brands);
-        // res.redirect("/brandsUpload")
+        // res.redirect(APP_DIRECTORY + "/brandsUpload")
       } else {
-        // res.redirect("/")
+        // res.redirect(APP_DIRECTORY + "/")
         console.log("Total Brand Count = " + brandCount);
         reject("Error Getting Data");
       }
@@ -1085,6 +1088,8 @@ function populateExcelData(fileName, addresses) {
   })
 }
 
+// http://localhost:3025/routingAssistanttmp/RW_-_Tue_Jun_13_2023_19-24_ejerenwaavis@gmail.com.xlsx
+
 function populateExcelDataRoute4Me(fileName, addresses) {
   var workbook = new Excel.Workbook();
 
@@ -1174,4 +1179,6 @@ function Body(title, error, message) {
   this.title = title;
   this.error = error;
   this.message = message;
+  this.domain = APP_DIRECTORY;
+  this.publicFolder = PUBLIC_FOLDER;
 }

@@ -2,7 +2,7 @@
 
 
   <main class="form-signin">
-    <form id="fileUpload" action="/fileUpload" method="post" enctype="multipart/form-data">
+    <form id="fileUpload" action="<%= body.domain %>/fileUpload" method="post" enctype="multipart/form-data">
       <!-- <img class="mb-4" src="/docs/5.0/assets/brand/bootstrap-logo.svg" alt="" width="72" height="57"> -->
       <h1 class="h3 mb-1 fw-normal">Upload Eli.CSV</h1>
       <p><small>upload the exported manifest <i class="fas fa-question"></i> </small></p>
@@ -44,7 +44,7 @@
             Route 4 Me
           </label>
         </div>
-        <div class="d-inline-block me-2">
+        <div class="d-none me-2">
           <input class="form-check-input" type="radio" name="extractFor" value="print" id="export3">
           <label class="form-check-label" for="export3">
             Printing
@@ -57,8 +57,10 @@
         <input type="file" id="elicsv" name="elicsv" class="form-control" placeholder="elicsv" required autofocus>
       </div>
       <button class="w-100 btn btn-lg btn-primary" type="submit">Upload <i class="fas fa-file-upload"></i></button>
-      <p class="mt-5 mb-0 text-muted">&copy; LS Assistant <%= new Date().getFullYear() %> | built by <a
-            href="https://ejerenwaavis.github.io/cv/"> Avis </a> </p>
+            <p class="mt-5 mb-0 text-muted">
+              <bold>&copy; RouteAssistant</bold> by ACED Devops <%= new Date().getFullYear() %> | Triumph Courier
+                Services
+            </p>
 
     </form>
 

@@ -1,10 +1,13 @@
+const domain = $('#domain').attr('domain');
+
+
 $(function(){
   $("#roadWarrioirLink").hide();
   $("#optimizeButton").hide();
 })
 
 function deleteFile(path){
-  $.post("/delete", {path:path}, function(status){
+  $.post(domain + "/delete", {path:path}, function(status){
     if(200){
       if(!path.includes('R4M'))
       $("#roadWarrioirLink").fadeIn("fast").fadeOut("fast").fadeIn("slow");

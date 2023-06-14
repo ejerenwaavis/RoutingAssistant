@@ -4,7 +4,7 @@
 
 
   <main class="form-signin">
-    <form action="/register" method="post">
+    <form action="<%= body.domain %>/register" method="post">
       <%if (body.message){%>
       <div class="alert alert-success alert-dismissible fade show" role="alert">
         <!-- <strong>Holy guacamole!</strong>  -->
@@ -39,9 +39,12 @@
     </div>
 
     <button class="w-100 btn btn-lg btn-outline-primary" type="submit">Create my Account</button>
-    <p class="mt-3">Already a User? <a href="/login" class="d-inline">Login in here </a></p>
+    <p class="mt-3">Already a User? <a href="<%= body.domain %>/login" class="d-inline">Login in here </a></p>
 
-    <p class="mt-5 mb-0 text-muted">&copy; LS Assistant <%= new Date().getFullYear() %> | built by <a href="https://ejerenwaavis.github.io/cv/"> Avis </a> </p>
+      <p class="mt-5 mb-0 text-muted">
+        <bold>&copy; RouteAssistant</bold> by ACED Devops <%= new Date().getFullYear() %> | Triumph Courier
+          Services
+      </p>
 
     </form>
   </main>
