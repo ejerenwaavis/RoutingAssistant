@@ -1,4 +1,7 @@
-require("dotenv").config();
+const SERVER = !(process.execPath.includes("C:"));//process.env.PORT;
+if (!SERVER){
+  require("dotenv").config();
+}
 
 
 const CLIENT_ID = process.env.CLIENTID;
@@ -14,15 +17,15 @@ const MONGOURI2 = process.env.MONGOURI2;
 
 
 const SALTROUNDS = 10;
-const SERVER = !(process.execPath.includes("C:"));//process.env.PORT;
 const SECRETE = process.env.SECRETE;
 const STRIPEAPI = process.env.STRIPEAPI;
 
 const APP_DIRECTORY = process.env.APP_DIRECTORY;
 const PUBLIC_FOLDER = (SERVER) ? "./" : "../";
+const TEMP_FILEPATH = (process.env.TEMP_FILEPATH ? process.env.TEMP_FILEPATH : 'tmp/');
 
 
-const tempFilePath = 'tmp/';
+const tempFilePath = TEMP_FILEPATH;
 
 
 const express = require("express");
@@ -54,7 +57,7 @@ app.use(bodyParser.urlencoded({
   extended: true
 }));
 app.use(express.static("public"));
-app.use('/tmp', express.static("tmp"));
+app.use(express.static(tempFilePath));
 app.use(express.static("."));
 app.use(express.json());
 
@@ -1069,7 +1072,7 @@ function populateExcelData(fileName, addresses) {
         // console.log(JSON.stringify(address));
       }
     }
-    fs.mkdir("./tmp", (err) => {
+    fs.mkdir(tempFilePath, (err) => {
       if (err) {
         // console.log(err.message);
         // console.log(err.code);
@@ -1080,7 +1083,7 @@ function populateExcelData(fileName, addresses) {
           throw err;
         }
       }
-      console.log("'/tmp' Directory was created.");
+      console.log("" + tempFilePath + " Directory was created.");
       return workbook.xlsx.writeFile(tempFilePath + fileName);
     });
     // return workbook.xlsx.writeFile(tempFilePath + "legacyNew.xlsx");
@@ -1113,7 +1116,7 @@ function populateExcelDataRoute4Me(fileName, addresses) {
         // console.log(JSON.stringify(address));
       }
     }
-    fs.mkdir("./tmp", (err) => {
+    fs.mkdir(tempFilePath, (err) => {
       if (err) {
         // console.log(err.message);
         // console.log(err.code);
