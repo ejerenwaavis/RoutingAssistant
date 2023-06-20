@@ -20,7 +20,7 @@ const SALTROUNDS = 10;
 const SECRETE = process.env.SECRETE;
 const STRIPEAPI = process.env.STRIPEAPI;
 
-const APP_DIRECTORY = process.env.APP_DIRECTORY;
+const APP_DIRECTORY = !(SERVER) ? "" : ((process.env.APP_DIRECTORY) ? (process.env.APP_DIRECTORY) : "");
 const PUBLIC_FOLDER = (SERVER) ? "./" : "../";
 const TEMP_FILEPATH = (process.env.TEMP_FILEPATH ? process.env.TEMP_FILEPATH : 'tmp/');
 
