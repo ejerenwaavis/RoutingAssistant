@@ -20,7 +20,7 @@ const SALTROUNDS = 10;
 const SECRETE = process.env.SECRETE;
 const STRIPEAPI = process.env.STRIPEAPI;
 
-const APP_DIRECTORY = process.env.APP_DIRECTORY //!(SERVER) ? "" : ((process.env.APP_DIRECTORY) ? (process.env.APP_DIRECTORY) : "");
+const APP_DIRECTORY = !(SERVER) ? "" : ((process.env.APP_DIRECTORY) ? (process.env.APP_DIRECTORY) : "");
 const PUBLIC_FOLDER = (SERVER) ? "./" : "../";
 const PUBLIC_FILES = process.env.PUBLIC_FILES;
 const TEMP_FILEPATH = (process.env.TEMP_FILEPATH ? process.env.TEMP_FILEPATH : 'tmp/');
@@ -289,7 +289,10 @@ app.route(APP_DIRECTORY + "/fileUpload")
               populateExcelDataRoute4Me(tempFileName, addresses);
             }
             res.render("excellDownload.ejs", {
-              filePath: tempFilePath  + tempFileName,
+              //uncomment fir local developement
+              // filePath: tempFilePath  + tempFileName,
+              // remote hosting version
+              filePath: (SERVER? APP_DIRECTORY + "/": tempFilePath)  + tempFileName,
               body: new Body("Download", "", ""),
               user: req.user,
             });
