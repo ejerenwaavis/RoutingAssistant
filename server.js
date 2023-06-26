@@ -1156,7 +1156,7 @@ async function clearTempFolder(){
   if (err) throw err;
 
   for (const file of files) {
-    fs.unlink(path.join(tempFilePath, file), (err) => {
+    fs.rm(path.join(tempFilePath, file), (err) => {
       if (err) throw err;
     });
   }
