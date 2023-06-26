@@ -22,6 +22,7 @@ const STRIPEAPI = process.env.STRIPEAPI;
 
 const APP_DIRECTORY = !(SERVER) ? "" : ((process.env.APP_DIRECTORY) ? (process.env.APP_DIRECTORY) : "");
 const PUBLIC_FOLDER = (SERVER) ? "./" : "../";
+const PUBLIC_FILES = process.env.PUBLIC_FILES;
 const TEMP_FILEPATH = (process.env.TEMP_FILEPATH ? process.env.TEMP_FILEPATH : 'tmp/');
 
 
@@ -251,7 +252,7 @@ app.route(APP_DIRECTORY + "/")
     // print(tempFilePath);
     if (req.isAuthenticated()) {
       res.render("home.ejs", {
-        body: new Body("Home", "", ""),
+        body: new Body("Upload", "", ""),
         user: req.user,
       });
     } else {
@@ -1168,4 +1169,5 @@ function Body(title, error, message) {
   this.message = message;
   this.domain = APP_DIRECTORY;
   this.publicFolder = PUBLIC_FOLDER;
+  this.publicFiles = PUBLIC_FILES;
 }

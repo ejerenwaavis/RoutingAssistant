@@ -3,10 +3,13 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <meta name="description" content="">
-  <meta name="generator" content="Hugo 0.82.0">
-  <title>  RouteAssistant · <%=body.title%> </title>
+  <meta name="author" content="ACED Devops">
+  <meta name="generator" content="Jekyll v4.1.1">
+  <title>
+    <%= body.title %> · RouteAssistant - TCS
+  </title>
 
   <!-- Favicon -->
   <link rel="icon" href="https://triumphcourier.com/img/Logo-SVG.svg">
@@ -38,6 +41,8 @@
   <!-- Stripe JS -->
   <script src="https://js.stripe.com/v3/"></script>
 
+  <!-- Global Custom styles for Triumph Courier -->
+  <link href="<%= body.publicFiles %>/css/style.css" rel="stylesheet">
 
   <!-- Custom styles for this template -->
   <link href="<%= body.publicFolder %>css/login.css" rel="stylesheet">
@@ -46,6 +51,8 @@
 
 <body class="text-center">
 
+
+  
   <% if(body.title !=="Account" ){%>
     <%if(user){%>
       <div class="my-4 fixed-top">
@@ -75,6 +82,9 @@
           <a href="<%= body.domain %>/" class="btn btn-xs btn-outline-secondary "><i class="fas fa-home"></i>
             Home</a>
           <%}%>
+
+
+
 
 
             <!-- *******************DOMAIN HANDLING*************************** -->
