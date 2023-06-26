@@ -34,6 +34,8 @@ const ejs = require("ejs");
 const papa = require("papaparse");
 const bodyParser = require("body-parser");
 const fs = require("fs");
+const fsp = require('fs/promises');
+const path = require("path");
 const Excel = require('exceljs');
 const formidable = require('formidable');
 const mongoose = require("mongoose");
@@ -47,8 +49,6 @@ const passportLocalMongoose = require("passport-local-mongoose");
 const LocalStrategy = require('passport-local').Strategy;
 const FacebookStrategy = require('passport-facebook').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-
-
 
 
 // Configure app to user EJS abd bodyParser
@@ -81,14 +81,14 @@ mongoose.connect(uri, {
   useUnifiedTopology: true
 });
 mongoose.set("useCreateIndex", true);
-
+3
 const brandSchema = new mongoose.Schema({
   _id: String,
   trackingPrefixes: [String], //array of variants of the tracking prefixes
 });
 
 const Brand = mongoose.model("Brand", brandSchema);
-
+var allBrands;
 
 
 const userSchema = new mongoose.Schema({
@@ -260,8 +260,11 @@ app.route(APP_DIRECTORY + "/")
   })
 
 app.route(APP_DIRECTORY + "/fileUpload")
-  .post(function (req, res) {
+  .post(async function (req, res) {
     if (req.isAuthenticated()) {
+      if(allBrands.length<1){
+        cacheBrands();
+      }
       var form = new formidable.IncomingForm();
       form.parse(req, function (err, fields, files) {
         let upload = files.elicsv;
@@ -275,7 +278,7 @@ app.route(APP_DIRECTORY + "/fileUpload")
         if (extractFor != "print") {
           let fileNamePrefix = (extractFor === "roadWarrior") ? "RW - " : "R4M - ";
           let tempFileName = (fileNamePrefix + today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " " + req.user._id + '.xlsx').replace(/ /g, "_");
-          getData(upload.path, { loaded: loaded, attempted: attempted, extractFor: extractFor }).then(function (addresses) {
+          getData(upload.path, { loaded: loaded, attempted: attempted, delivered: delivered, extractFor: extractFor }).then(function (addresses) {
             console.log("Records read: " + addresses.length);
             if (extractFor === "roadWarrior") {
               console.log("running for ROAD WARIOR");
@@ -318,12 +321,13 @@ app.route(APP_DIRECTORY + "/fileUpload")
 
 app.route(APP_DIRECTORY + "/brandsFileUpload")
   .get(function (req, res){
-    if (req.isAuthenticated()) {
+    if (req.isAuthenticated() || req.hostname.includes("localhost") ) {
       res.render("brandCapture.ejs", {
-        body: new Body("Brands Upload - LSAsistant", "", ""),
+        body: new Body("Brands Upload - TCS", "", ""),
+        allBrands: null,
         updates:null,
         newBrands:null,
-        user: req.user,
+        user: (req.user)? req.user : null,
       });
     }else{
       console.log("Unauthenticated Request ");
@@ -331,35 +335,38 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
     }
   })
   .post(function (req, res) {
-    if (req.isAuthenticated()) {
+    if (req.isAuthenticated() || req.hostname.includes("localhost")) {
       var form = new formidable.IncomingForm();
       form.parse(req, function (err, fields, files) {
         let upload = files.loadXLS;
 
-        getBrandsFromExcelDocument(upload.path).then(function (data) {
+        getBrandsFromExcelDocument(upload.path).then(async function (data) {
 
           if (data != "Error Getting Data"){
             console.log("Records read: " + data.length);
             console.log("Checking for and Uploading New Brands ... ");
             let newUpdates = [];
             let newBrandsAdded = [];
+            let allBrandsFound = [];
             var processedItem = 0;
 
-            data.forEach(dataBrand => {
+            await data.forEach(dataBrand => {
+              allBrandsFound.push(dataBrand._id);
               Brand.exists({_id:dataBrand._id}, async function (err,exists) {
-                
                 if(exists){
-                  // console.log("Brand Already Exists.erre. Checking and Updating for Tracking Prefixes");
-                  Brand.updateOne(
+                  // console.log("Brand Already Exists Checking and Updating for Tracking Prefixes");
+                  await Brand.updateOne(
                     { _id: dataBrand._id },
                     { $addToSet: { trackingPrefixes: { $each: dataBrand.trackingPrefixes } } },
-                    await function (err,updatedBrand) {
+                    function (err,updatedBrand) {
                       // console.log(err);
                       if(!err){
                         if(updatedBrand.nModified > 0){
                           console.log(dataBrand);
                           console.log(dataBrand._id+" Modified succeffully");
-                          newUpdates = dataBrand._id + "";
+                            newUpdates.push(dataBrand._id);
+                        }else{
+                          // console.log("No new Prefixes to be added");
                         }
                       }else{
                         console.log("Brand Update Failed");
@@ -370,11 +377,11 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
                 }else{
                   console.log("New Brand Found, attempting upload");
                   const newBrand = new Brand(dataBrand);
-                  newBrand.save(await function(err,savedDoc){
+                  newBrand.save(function(err,savedDoc){
                     if(!err){
                       console.log(newBrand);
                       console.log(newBrand._id+" saved succeffully");
-                      newBrandsAdded = newBrand._id + "";
+                            newBrandsAdded.push(newBrand._id)
                     }else{
                         console.log("Failed to Save Brand");
                         console.log(err);
@@ -382,28 +389,38 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
                     }
                   });
                 }
-              })
-
+              });
+              
               processedItem++;
+              
               if(processedItem >= data.length){
-                console.log("Data Length" + data.length);
+                console.log("Data Length " + data.length);
                 console.log("processedItem : "+ processedItem);
-                console.log("updates:");
+                console.log("\n------\nAll Brands Processed");
+                console.log(allBrandsFound);
+                console.log("\n------\nUpdated Brands");
                 console.log(newUpdates);
-                console.log("\n------\nNew Brands");
+                console.log("\n------\nNew Brands Added");
                 console.log(newBrandsAdded);
+                cacheBrands();
                 res.render("brandCapture.ejs", {
-                  body: new Body("Brands Upload - LSAsistant", "", "Brand Updates Done - "),
+                  body: new Body("Brands Upload - LSAsistant", "", "Brand Updates Done"),
+                  allBrands: allBrandsFound,
                   updates: newUpdates,
                   newBrands: newBrandsAdded,
-                  user: req.user,
+                  user: (req.user) ? req.user : null,
                 });
               }
             });
-
             
           }else{
-            res.redirect(APP_DIRECTORY + "/");
+            res.render("brandCapture.ejs", {
+                  body: new Body("Brands Upload - LSAsistant", "Error Readidng Data", ""),
+                  allBrands: null,
+                  updates: null,
+                  newBrands: null,
+                  user: (req.user) ? req.user : null,
+                });
           }
         });
       });
@@ -487,7 +504,7 @@ app.get(APP_DIRECTORY + '/auth/google', passport.authenticate('google', {
 
 app.get(APP_DIRECTORY + '/auth/facebook', passport.authenticate('facebook', {
   scope: 'email'
-})); 4
+})); 
 
 app.route(APP_DIRECTORY + "/facebookLoggedin")
   .get(function (req, res, next) {
@@ -693,7 +710,9 @@ app.post(APP_DIRECTORY + '/create-checkout-session', async (req, res) => {
 
 
 app.listen(process.env.PORT || 3025, function () {
-  console.log("LS ASsistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3025));
+  clearTempFolder();
+  cacheBrands();
+  console.log("RoutingAssistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3025));
   // print("./")
 });
 
@@ -744,7 +763,7 @@ function copyLegacyTemplate(tempFileName) {
 }
 
 // promise that returns an array of JSON Addresses {customerName, address, apt(if any:ste,apt), city,state, country};
-function getData(filePath, options) {
+async function getData(filePath, options) {
   return new Promise(function (resolve, reject) {
     fs.readFile(filePath, 'utf8', function (err, data) {
       // console.log(options);
@@ -752,82 +771,93 @@ function getData(filePath, options) {
         // console.log(data);
         let parsedJSON = papa.parse(data);
         let arrayOfAddress = [];
+        // console.log("get data says....");
+        // console.log(parsedJSON);
         for (let i = 1; i < parsedJSON.data.length; i++) {
-          let jsonAddress;
+          let jsonAddress = {};
+          jsonAddress.Barcode = parsedJSON.data[i][0];
+          let brand =  allBrands.filter( (foundBrand) => { return (foundBrand.trackingPrefixes.includes(jsonAddress.Barcode.substring(0,7))) })
+          let brandName = (brand === undefined || brand.length == 0)? "## Unregistered Brand ##" : brand[0]._id 
+          // console.log("*****");
+          // console.log(options);
+          // console.log(parsedJSON.data[i][1]);
+          // console.log("*****");
           if (parsedJSON.data[i][1] === options.loaded || parsedJSON.data[i][1] === options.attempted || parsedJSON.data[i][1] === options.delivered) {
-            // console.log(parsedJSON.data[i][1]);
-            // console.log(options);
-            tempSplitAddress = (parsedJSON.data[i][3] + "").split(".");
-            let splitAddress;
-            if (tempSplitAddress.includes(" US")) {
-              splitAddress = tempSplitAddress;
-            } else {
-              tempSplitAddress.push(" US");
-              // console.log(tempSplitAddress);
-              splitAddress = tempSplitAddress;
-            }
-            // console.log(splitAddress.includes(" US"));
-            // console.log(splitAddress);
-            if (options.extractFor === "roadWarrior" || options.extractFor === "route4me") {
-              if (splitAddress.length > 5) {
-                jsonAddress = {
-                  Name: ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
-                  // apt:(splitAddress[1]+"").trim(),
-                  Street: (splitAddress[2] + "").trim() + ", " + (splitAddress[1] + "").trim(),
-                  City: (splitAddress[3] + "").trim(),
-                  State: (splitAddress[4] + "").trim(),
-                  Postal: "",
-                  Country: (splitAddress[5] + "").trim(),
-                  'Color (0-1)': "",
-                  Phone: "",
-                  Note: "",
-                  Latitude: "",
-                  Longitude: "",
-                  'Service Time': "",
+            
+                tempSplitAddress = (parsedJSON.data[i][3] + "").split(".");
+                let splitAddress;
+                if (tempSplitAddress.includes(" US")) {
+                  splitAddress = tempSplitAddress;
+                } else {
+                  tempSplitAddress.push(" US");
+                  // console.log(tempSplitAddress);
+                  splitAddress = tempSplitAddress;
                 }
-              } else {
-                /*
-            Header Errors:
-    Column 'G' is missing its header: 'Color''
-    Column 'H' is missing its header: 'Phone''
-    Column 'I' is missing its header: 'Note''
-    Column 'J' is missing its header: 'Lat''
-    Column 'K' is missing its header: 'Lon''
-    Column 'L' is missing its header: 'Service''
-            */
-                jsonAddress = {
-                  Name: ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
-                  Street: (splitAddress[1] + "").trim(),
-                  City: (splitAddress[2] + "").trim(),
-                  State: (splitAddress[3] + "").trim(),
-                  Postal: "",
-                  Country: (splitAddress[4] + "").trim(),
-                  'Color (0-1)': "",
-                  Phone: "",
-                  Note: "",
-                  Latitude: "",
-                  Longitude: "",
-                  'Service Time': "",
+                // console.log(splitAddress.includes(" US"));
+                // console.log(splitAddress);
+                if (options.extractFor === "roadWarrior" || options.extractFor === "route4me") {
+                  if (splitAddress.length > 5) {
+                    jsonAddress = {
+                      Brand: brandName,
+                      Name: ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
+                      // apt:(splitAddress[1]+"").trim(),
+                      Street: (splitAddress[2] + "").trim() + ", " + (splitAddress[1] + "").trim(),
+                      City: (splitAddress[3] + "").trim(),
+                      State: (splitAddress[4] + "").trim(),
+                      Postal: "",
+                      Country: (splitAddress[5] + "").trim(),
+                      'Color (0-1)': "",
+                      Phone: "",
+                      Note: "",
+                      Latitude: "",
+                      Longitude: "",
+                      'Service Time': "",
+                    }
+                  } else {
+                    jsonAddress = {
+                      Brand: brandName,
+                      Name: ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
+                      Street: (splitAddress[1] + "").trim(),
+                      City: (splitAddress[2] + "").trim(),
+                      State: (splitAddress[3] + "").trim(),
+                      Postal: "",
+                      Country: (splitAddress[4] + "").trim(),
+                      'Color (0-1)': "",
+                      Phone: "",
+                      Note: "",
+                      Latitude: "",
+                      Longitude: "",
+                      'Service Time': "",
 
+                    }
+                  }
                 }
-              }
-            }
-            // console.log(jsonAddress.Name);
-            if (jsonAddress.Name != "undefined" && jsonAddress.Name != " Unknown name") {
-              arrayOfAddress.push(jsonAddress);
-            }
+                // console.log(jsonAddress);
+                // if (jsonAddress.Name != "undefined" && jsonAddress.Name != " Unknown name") {
+                  arrayOfAddress.push(jsonAddress);
+                // }
+
+                // console.log("Objects " + parsedJSON.data.length);
+                
+              // }
+            
+              
+            // });  // end if brand finding
           } else {
             // console.log("already attempted/delivered");
           }
-        }
-
-        if (arrayOfAddress) {
+          
+        } //end of for loop
+        if (arrayOfAddress.length > 1) {
           console.log("Data Processing Done . . . ");
-          console.log(arrayOfAddress);
+          // console.log(arrayOfAddress);
           resolve(arrayOfAddress);
         } else {
+          console.log("Error getting data");  
           reject("Error Getting Data");
         }
+        
+        // }
       } else {
         console.log("something happened");
       }
@@ -863,7 +893,7 @@ function getBrandsFromExcelDocument(filePath) {
           var includesTrackingPrefix = searchResult.trackingPrefixes.includes(trackingPrefix);
           if(!includesTrackingPrefix){
             searchResult.trackingPrefixes.push(trackingPrefix)
-            console.log("new prefix for "+brandName+"  --> '"+ trackingPrefix +"' added ");
+            console.log("new prefix for "+brandName+"  --> '"+ trackingPrefix +"' added for data Collection");
           }
         }else{
           // console.log(".... FOUND NEW BRAND ...")
@@ -893,14 +923,6 @@ function getBrandsFromExcelDocument(filePath) {
         reject("Error Getting Data");
       }
 
-      // console.log("countr: " + country);
-      // var row = worksheet.getRow(i);
-      // row.getCell(1).value = address.Name;
-      // row.getCell(2).value = address.Street;
-      // row.getCell(3).value = address.City;
-      // row.getCell(4).value = state;
-      // row.getCell(6).value = country;
-      // row.commit();
       i++;
       // console.log(JSON.stringify(address));
 
@@ -910,74 +932,10 @@ function getBrandsFromExcelDocument(filePath) {
     })
 
 
-    // fs.readFile(filePath, 'utf8', function (err, data) {
-    //   // console.log(options);
-    //   if (!err) {
-    //     // console.log(data);
-    //     let parsedJSON = papa.parse(data);
-    //     let arrayOfAddress = [];
-    //     for (let i = 1; i < parsedJSON.data.length; i++) {
-    //       let jsonAddress;
-    //       if (parsedJSON.data[i][1] === options.loaded || parsedJSON.data[i][1] === options.attempted || parsedJSON.data[i][1] === options.delivered) {
-    //         // console.log(parsedJSON.data[i][1]);
-    //         // console.log(options);
-    //         tempSplitAddress = (parsedJSON.data[i][3] + "").split(".");
-    //         let splitAddress;
-    //         if (tempSplitAddress.includes(" US")) {
-    //           splitAddress = tempSplitAddress;
-    //         } else {
-    //           tempSplitAddress.push(" US");
-    //           // console.log(tempSplitAddress);
-    //           splitAddress = tempSplitAddress;
-    //         }
-    //         // console.log(splitAddress.includes(" US"));
-    //         // console.log(splitAddress);
-    //         if (options.extractFor === "roadWarrior" || options.extractFor === "route4me") {
-    //           if (splitAddress.length > 5) {
-    //             jsonAddress = {
-    //               Name: ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
-    //               // apt:(splitAddress[1]+"").trim(),
-    //               Street: (splitAddress[2] + "").trim() + ", " + (splitAddress[1] + "").trim(),
-    //               City: (splitAddress[3] + "").trim(),
-    //               State: (splitAddress[4] + "").trim(),
-    //               Postal: "",
-    //               Country: (splitAddress[5] + "").trim(),
-    //               'Color (0-1)': "",
-    //               Phone: "",
-    //               Note: "",
-    //               Latitude: "",
-    //               Longitude: "",
-    //               'Service Time': "",
-    //             }
-    //           }
-    //         }
-    //         // console.log(jsonAddress.Name);
-    //         if (jsonAddress.Name != "undefined" && jsonAddress.Name != " Unknown name") {
-    //           arrayOfAddress.push(jsonAddress);
-    //         }
-    //       } else {
-    //         // console.log("already attempted/delivered");
-    //       }
-    //     }
-
-    //     if (arrayOfAddress) {
-    //       console.log("Data Processing Done . . . ");
-    //       // console.log(arrayOfAddress);
-    //       resolve(arrayOfAddress);
-    //     } else {
-    //       reject("Error Getting Data");
-    //     }
-    //   } else {
-    //     console.log("something happened");
-    //   }
-    // });
+   
 
   });
 }
-
-
-
-
 
 
 function getDataForPrint(filePath, options) {
@@ -1067,6 +1025,7 @@ function populateExcelData(fileName, addresses) {
         row.getCell(3).value = address.City;
         row.getCell(4).value = state;
         row.getCell(6).value = country;
+        row.getCell(9).value = address.Brand;
         row.commit();
         i++;
         // console.log(JSON.stringify(address));
@@ -1105,7 +1064,7 @@ function populateExcelDataRoute4Me(fileName, addresses) {
         country = (country.length > 3) ? country.split(" ")[0][0] + country.split(" ")[1][0] : country;
         let state = address.State.toUpperCase();
         var row = worksheet.getRow(i);
-        row.getCell(2).value = address.Name;
+        row.getCell(2).value = address.Brand;
         row.getCell(1).value = address.Street + ", " + address.City + ", " + state + ", " + country;
 
         // row.getCell(3).value = ;
@@ -1175,6 +1134,32 @@ function populateExcelDataForPrint(fileName, addresses, userName) {
     });
     // return workbook.xlsx.writeFile(tempFilePath + "legacyNew.xlsx");
   })
+}
+
+async function cacheBrands(){
+  allBrands = await Brand.find({},"-__v");
+  stringBrands = JSON.stringify(allBrands);
+  // reCon = JSON.parse(stringBrands);
+  // console.log(reCon);
+  fs.writeFile(tempFilePath + 'brands.txt', stringBrands, err => {
+  if (err) {
+    console.error(err);
+  }
+  // file written successfully
+  console.log("Brands written to file");
+});
+}
+
+async function clearTempFolder(){
+  fs.readdir(tempFilePath, (err, files) => {
+  if (err) throw err;
+
+  for (const file of files) {
+    fs.unlink(path.join(tempFilePath, file), (err) => {
+      if (err) throw err;
+    });
+  }
+});
 }
 
 function Body(title, error, message) {
