@@ -1156,9 +1156,11 @@ async function clearTempFolder(){
   if (err) throw err;
 
   for (const file of files) {
-    fs.unlink(path.join(tempFilePath, file), (err) => {
-      if (err) throw err; 
-    });
+    if(file.startsWith("R4M") || file.startsWith("RW") || file.startsWith("bra")){
+      fs.unlink(path.join(tempFilePath, file), (err) => {
+        if (err) throw err; 
+      });
+    }
   }
 });
 }
