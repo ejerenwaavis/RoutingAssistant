@@ -23,7 +23,7 @@ const STRIPEAPI = process.env.STRIPEAPI;
 const APP_DIRECTORY = process.env.APP_DIRECTORY //!(SERVER) ? "" : ((process.env.APP_DIRECTORY) ? (process.env.APP_DIRECTORY) : "");
 const PUBLIC_FOLDER = (SERVER) ? "./" : "../";
 const PUBLIC_FILES = process.env.PUBLIC_FILES;
-const TEMP_FILEPATH = 'tmp/'; //(process.env.TEMP_FILEPATH ? process.env.TEMP_FILEPATH : 'tmp/');
+const TEMP_FILEPATH = (process.env.TEMP_FILEPATH ? process.env.TEMP_FILEPATH : 'tmp/');
 
 
 const tempFilePath = TEMP_FILEPATH;
