@@ -805,7 +805,7 @@ async function getData(filePath, options) {
                       Brand: brandName,
                       Name: ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
                       // apt:(splitAddress[1]+"").trim(),
-                      Street: (splitAddress[2] + "").trim() + ", " + (splitAddress[1] + "").trim(),
+                      Street:  (splitAddress[1] + "").trim() + ", " + (splitAddress[2] + "").trim(),
                       City: (splitAddress[3] + "").trim(),
                       State: (splitAddress[4] + "").trim(),
                       Postal: "",

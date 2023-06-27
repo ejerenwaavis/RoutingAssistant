@@ -57,11 +57,39 @@
         <input type="file" id="elicsv" name="elicsv" class="form-control" placeholder="elicsv" required autofocus>
       </div>
       <button class="w-100 btn btn-lg btn-primary" type="submit">Upload <i class="fas fa-file-upload"></i></button>
-              <p class="mt-5 mb-3 text-muted"><strong>&copy; RouteAssistant</strong> by ACED Devops 2020 | Triumph Courier Services</p>
-              </p>
+      <p class="mt-5 mb-3 text-muted"><strong>&copy; RouteAssistant</strong> by ACED Devops 2020 | Triumph Courier
+        Services</p>
+      </p>
 
 
     </form>
+
+    <!-- Button trigger modal -->
+    <button type="button" id="modalStart" class="d-none btn btn-primary" data-bs-toggle="modal" data-bs-target="#notice">
+      Launch Notice
+    </button>
+
+    <!-- Modal -->
+    <div class="modal fade" id="notice" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
+      aria-labelledby="staticBackdropLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center">
+          <div class="py-3 border border-bottom">
+            <h1 class="modal-title fs-5" id="staticBackdropLabel">Important Information!</h1>
+            <!-- <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button> -->
+          </div>
+          <div class="modal-body py-4">
+            Before continuing confirm that you have reported all <b>Walmart</b>, <b>Food Boxes</b> and <b>Payrols</b> still hanging on your MLS to a team Lead.
+            This is crucial to the success of the team.
+          </div>
+          <div class="py-3 border border-bottom">
+            <div class=" text-center">
+              <button type="button" class="btn btn-outline-accent" data-bs-dismiss="modal">I Have Reported MLS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <p class="fixed-bottom text-muted">
       By using this service you agree our
@@ -91,6 +119,8 @@
     crossorigin="anonymous"></script>
   <!-- jQuery -->
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+  <script src="../Public/js/notice.js"></script>
 
   </body>
 
