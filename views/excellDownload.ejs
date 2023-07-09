@@ -1,10 +1,28 @@
 <%- include("partials/header.ejs")%>
 
   <main class="form-signin">
-    <a class="nav-link text-danger" href="<%= body.domain %>/">Start Afresh <i class="fas fa-redo-alt"></i></a>
+    <!-- <ul> -->
+      <!-- </ul> -->
+      
+      <% if(errors.length > 0){ %>
+        <div  class="alert alert-secondary alert-dismissible fade show d-flex align-items-center" role="alert">
+          <div class="d-block ps-4">
+            <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+
+            <p class="row">The following stops were skipped due to errors</p>
+            <% errors.forEach(e => { %>
+              <p class="row ">  <strong>Line: <%= e.line %></strong> <%= e.name %>, <%= e.fullAddress %></p>
+            <% }) %>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          
+        </div>
+      <% } %>
+    
       <!-- <img class="mb-4" src="/docs/5.0/assets/brand/bootstrap-logo.svg" alt="" width="72" height="57"> -->
       <h1 class="h3 mb-2 fw-normal">Download Road Warrior Upload File</h1>
       <p><small>Click the buttoon to start the download </small></p>
+      <a class="mb-3 btn btn-outline-accent" href="<%= body.domain %>/">Start Afresh <i class="fas fa-redo-alt"></i></a>
       <a href="<%=filePath%>" onclick="deleteFile('<%=filePath%>')" class="mb-3 btn btn-outline-success">Download <i class="fas fa-file-download"></i></a> <br />
       <a href="https://user.roadwarrior.app/Upload" target="blank" id="roadWarrioirLink" class="">Open Road Warrior Upload Tool <i class=""></i></a>
       <p class="mt-5 mb-3 text-muted"><strong>&copy; RouteAssistant</strong> by ACED Devops 2020 | Triumph Courier Services

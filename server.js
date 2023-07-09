@@ -27,6 +27,7 @@ const TEMP_FILEPATH = (process.env.TEMP_FILEPATH ? process.env.TEMP_FILEPATH : '
 
 
 const tempFilePath = TEMP_FILEPATH;
+// var populateErrors = [];
 
 
 const express = require("express");
@@ -82,7 +83,7 @@ mongoose.connect(uri, {
   useUnifiedTopology: true
 });
 mongoose.set("useCreateIndex", true);
-3
+
 const brandSchema = new mongoose.Schema({
   _id: String,
   trackingPrefixes: [String], //array of variants of the tracking prefixes
@@ -273,33 +274,53 @@ app.route(APP_DIRECTORY + "/fileUpload")
         let attempted = (fields.attempted) ? "Attempted" : false;
         let delivered = (fields.delivered) ? "Delivered" : false;
         let extractFor = fields.extractFor;
+        // populateErrors = [];
 
         let today = new Date;
 
         if (extractFor != "print") {
           let fileNamePrefix = (extractFor === "roadWarrior") ? "RW - " : "R4M - ";
           let tempFileName = (fileNamePrefix + today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " " + req.user._id + '.xlsx').replace(/ /g, "_");
-          getData(upload.path, { loaded: loaded, attempted: attempted, delivered: delivered, extractFor: extractFor }).then(function (addresses) {
+          getData(upload.path, { loaded: loaded, attempted: attempted, delivered: delivered, extractFor: extractFor }).then(function (processedData) {
+            let addresses = processedData.addresses;
+            let errors = processedData.errors;
+            let read = addresses.length;
+            console.log("actual read: " + read);
             console.log("Records read: " + addresses.length);
+            // var populateResult;
             if (extractFor === "roadWarrior") {
               console.log("running for ROAD WARIOR");
-              populateExcelData(tempFileName, addresses);
+              populateExcelData(tempFileName, addresses).then((x) =>{
+                res.render("excellDownload.ejs", {
+                  //uncomment fir local developement
+                  // filePath: tempFilePath  + tempFileName,
+                  // remote hosting version
+                  filePath: (SERVER? APP_DIRECTORY + "/": tempFilePath)  + tempFileName,
+                  body: new Body("Download", "", ""),
+                  errors: (errors) ? errors: null,
+                  user: req.user,
+                });
+              });
             } else {
               console.log("running for ROUTE 4 ME");
-              populateExcelDataRoute4Me(tempFileName, addresses);
-            }
-            res.render("excellDownload.ejs", {
-              //uncomment fir local developement
-              // filePath: tempFilePath  + tempFileName,
-              // remote hosting version
-              filePath: (SERVER? APP_DIRECTORY + "/": tempFilePath)  + tempFileName,
-              body: new Body("Download", "", ""),
-              user: req.user,
-            });
-          })
-        }
+              // console.log("From after processed Data");
+              populateExcelDataRoute4Me(tempFileName, addresses).then((x)=>{
+                // console.log("Inside Promise prinintg");
+                // console.log(x);
+                res.render("excellDownload.ejs", {
+                  //uncomment fir local developement
+                  // filePath: tempFilePath  + tempFileName,
+                  // remote hosting version
+                  filePath: (SERVER? APP_DIRECTORY + "/": tempFilePath)  + tempFileName,
+                  body: new Body("Download", "", ""),
+                  errors: (errors) ? errors: null,
+                  user: req.user,
+                });
+              });
 
-        else {
+            }
+          })
+        } else {
           let tempFileName = (today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " -PRINT- " + req.user._id + '.xlsx').replace(/ /g, "_");
           // console.log("extract for print");
           getDataForPrint(upload.path, { loaded: loaded, attempted: attempted, extractFor: extractFor }).then(function (addresses) {
@@ -775,9 +796,12 @@ async function getData(filePath, options) {
         // console.log(data);
         let parsedJSON = papa.parse(data);
         let arrayOfAddress = [];
+        let errors = [];
+        let totalRecords = 0;
         // console.log("get data says....");
         // console.log(parsedJSON);
         for (let i = 1; i < parsedJSON.data.length; i++) {
+          totalRecords++;
           let jsonAddress = {};
           jsonAddress.Barcode = parsedJSON.data[i][0];
           let brand =  allBrands.filter( (foundBrand) => { return (foundBrand.trackingPrefixes.includes(jsonAddress.Barcode.substring(0,7))) })
@@ -801,15 +825,42 @@ async function getData(filePath, options) {
                 // console.log(splitAddress);
                 if (options.extractFor === "roadWarrior" || options.extractFor === "route4me") {
                   if (splitAddress.length > 5) {
+                    let country = (splitAddress[5] + "").trim();
+                    let countryProcessed = "";
+                    let name = ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A";
+                    let street = (splitAddress[1] + "").trim() + ", " + (splitAddress[2] + "").trim();
+                    let city = (splitAddress[3] + "").trim();
+                    try{
+                      if (country != "UNDEFINED") {
+                        // var row = worksheet.getRow(i);
+                        countryProcessed = (country.length > 3) ? country.split(" ")[0][0] + country.split(" ")[1][0] : country;
+                        // let state = address.State.toUpperCase();
+                        // row.getCell(2).value = address.Brand;
+                        // row.getCell(1).value = address.Street + ", " + address.City + ", " + state + ", " + country;
+
+                        // row.getCell(3).value = ;
+                        // row.getCell(4).value = state;
+                        // row.getCell(6).value = country;
+                        // row.commit();
+                        
+                        // console.log(JSON.stringify(address));
+                      }
+                    }catch(error){
+                      // console.log("errors where found at " + (i + 3));
+                      errors.push({name:name, line: (i+1), fullAddress: street + " " +city});
+                      // console.log(populateErrors);
+                    }
+
                     jsonAddress = {
                       Brand: brandName,
-                      Name: ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
+                      Name: name,//((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
                       // apt:(splitAddress[1]+"").trim(),
-                      Street:  (splitAddress[1] + "").trim() + ", " + (splitAddress[2] + "").trim(),
-                      City: (splitAddress[3] + "").trim(),
+                      Street: street,// (splitAddress[1] + "").trim() + ", " + (splitAddress[2] + "").trim(),
+                      City: city, //(splitAddress[3] + "").trim(),
                       State: (splitAddress[4] + "").trim(),
                       Postal: "",
-                      Country: (splitAddress[5] + "").trim(),
+                      Country: countryProcessed,
+                      // Country: (splitAddress[5] + "").trim(),
                       'Color (0-1)': "",
                       Phone: "",
                       Note: "",
@@ -853,11 +904,11 @@ async function getData(filePath, options) {
           
         } //end of for loop
         if (arrayOfAddress.length > 1) {
-          console.log("Data Processing Done . . . ");
+          // console.log("Data Processing Done . . . ");
           // console.log(arrayOfAddress);
-          resolve(arrayOfAddress);
+          resolve({addresses: arrayOfAddress, errors: errors, totalRecords:totalRecords});
         } else {
-          console.log("Error getting data");  
+          // console.log("Error getting data");  
           reject("Error Getting Data");
         }
         
@@ -873,7 +924,9 @@ async function getData(filePath, options) {
 // promise that returns an array of JSON Brands [{brandName, [tracking #1, tracking #1]}];
 function getBrandsFromExcelDocument(filePath) {
   return new Promise(function (resolve, reject) {
-    var brands = [];
+    var data = {};
+    // var allbrands = [];
+    var newBrands = [];
     var report = [];
     var workbook = new Excel.Workbook();
 
@@ -882,7 +935,7 @@ function getBrandsFromExcelDocument(filePath) {
       let i = 2;
       let brandCount = 0;
       let totalRows = worksheet.rowCount;
-      console.log(totalRows);
+      // console.log(totalRows);
 
       worksheet.eachRow(function (row, rowNumber) {
         // console.log('Row ' + rowNumber + ' = ' + JSON.stringify(row.values));
@@ -890,7 +943,7 @@ function getBrandsFromExcelDocument(filePath) {
         let trackingPrefix = tracking.substring(0,7);
         let brandName = row.getCell(5) + "";
         // let searchResult = brands.filter(function(b) { return b.brandName === brandName; });
-        let searchResult = brands.find(e => e._id === brandName);
+        let searchResult = allBrands.find(e => e._id === brandName);
         // console.log(brandName +" -- "+ trackingPrefix);
         
         if (searchResult) {
@@ -908,8 +961,6 @@ function getBrandsFromExcelDocument(filePath) {
           // console.log("Searched Brand Includes Tracking? " +brands[brandCount].trackingPrefix.includes(tracking));
           // console.log("Searched Brand Includes TrackingPrefix? " +brands[brandCount].trackingPrefix.includes(trackingPrefix));
         }
-
-
       });
 
       
@@ -1012,89 +1063,116 @@ function getDataForPrint(filePath, options) {
 
 
 function populateExcelData(fileName, addresses) {
-  var workbook = new Excel.Workbook();
+  return new Promise(function (resolve, reject) {
 
-  workbook.xlsx.readFile("original/legacy.xlsx").then(function () {
-    var worksheet = workbook.getWorksheet(1);
-    let i = 2;
-    for (address of addresses) {
-      let country = address.Country.toUpperCase();
-      // console.log("countr: " + country);
-      if (country != "UNDEFINED") {
-        country = (country.length > 3) ? country.split(" ")[0][0] + country.split(" ")[1][0] : country;
-        let state = address.State.toUpperCase();
-        var row = worksheet.getRow(i);
-        row.getCell(1).value = address.Name;
-        row.getCell(2).value = address.Street;
-        row.getCell(3).value = address.City;
-        row.getCell(4).value = state;
-        row.getCell(6).value = country;
-        row.getCell(9).value = address.Brand;
-        row.commit();
-        i++;
-        // console.log(JSON.stringify(address));
-      }
-    }
-    fs.mkdir(tempFilePath, (err) => {
-      if (err) {
-        // console.log(err.message);
-        // console.log(err.code);
-        if (err.code === "EEXIST") {
-          console.log("Directory ALREADY Exists.");
-          return workbook.xlsx.writeFile(tempFilePath + fileName);
-        } else {
-          throw err;
+    var workbook = new Excel.Workbook();
+
+    workbook.xlsx.readFile("original/legacy.xlsx").then(function () {
+      var worksheet = workbook.getWorksheet(1);
+      let i = 2;
+      for (address of addresses) {
+        let country = address.Country.toUpperCase();
+        // console.log("countr: " + country);
+        if (country != "UNDEFINED") {
+          country = (country.length > 3) ? country.split(" ")[0][0] + country.split(" ")[1][0] : country;
+          let state = address.State.toUpperCase();
+          var row = worksheet.getRow(i);
+          row.getCell(1).value = address.Name;
+          row.getCell(2).value = address.Street;
+          row.getCell(3).value = address.City;
+          row.getCell(4).value = state;
+          row.getCell(6).value = country;
+          row.getCell(9).value = address.Brand;
+          row.commit();
+          i++;
+          // console.log(JSON.stringify(address));
         }
       }
-      console.log("" + tempFilePath + " Directory was created.");
-      return workbook.xlsx.writeFile(tempFilePath + fileName);
-    });
-    // return workbook.xlsx.writeFile(tempFilePath + "legacyNew.xlsx");
-  })
+      fs.mkdir(tempFilePath, (err) => {
+        if (err) {
+          // console.log(err.message);
+          // console.log(err.code);
+          if (err.code === "EEXIST") {
+            console.log("Directory ALREADY Exists.");
+            resolve(workbook.xlsx.writeFile(tempFilePath + fileName));
+          } else {
+            reject(err.code);
+            throw err;
+          }
+        }else{
+          console.log("" + tempFilePath + " Directory was created.");
+          resolve(workbook.xlsx.writeFile(tempFilePath + fileName));
+        }
+      });
+      // return workbook.xlsx.writeFile(tempFilePath + "legacyNew.xlsx");
+    })
+  });
 }
 
 // http://localhost:3025/routingAssistanttmp/RW_-_Tue_Jun_13_2023_19-24_ejerenwaavis@gmail.com.xlsx
 
-function populateExcelDataRoute4Me(fileName, addresses) {
-  var workbook = new Excel.Workbook();
+async function populateExcelDataRoute4Me(fileName, addresses) {
+  return new Promise(function (resolve,reject){
+  
+    var workbook = new Excel.Workbook();
+    let populateErrors = [];
+    workbook.xlsx.readFile("original/r4me-original.xlsx").then(function () {
+      var worksheet = workbook.getWorksheet(1);
+      let i = 2;
+      let e = 3;
+      for (address of addresses) {
+        let country = address.Country.toUpperCase();
+        // console.log("country: " + country);
+        // console.log(address.Name);
+        try{
+          if (country != "UNDEFINED") {
+            var row = worksheet.getRow(i);
+            country = (country.length > 3) ? country.split(" ")[0][0] + country.split(" ")[1][0] : country;
+            let state = address.State.toUpperCase();
+            row.getCell(2).value = address.Brand;
+            row.getCell(1).value = address.Street + ", " + address.City + ", " + state + ", " + country;
 
-  workbook.xlsx.readFile("original/r4me-original.xlsx").then(function () {
-    var worksheet = workbook.getWorksheet(1);
-    let i = 2;
-    for (address of addresses) {
-      let country = address.Country.toUpperCase();
-      // console.log("countr: " + country);
-      if (country != "UNDEFINED") {
-        country = (country.length > 3) ? country.split(" ")[0][0] + country.split(" ")[1][0] : country;
-        let state = address.State.toUpperCase();
-        var row = worksheet.getRow(i);
-        row.getCell(2).value = address.Brand;
-        row.getCell(1).value = address.Street + ", " + address.City + ", " + state + ", " + country;
-
-        // row.getCell(3).value = ;
-        // row.getCell(4).value = state;
-        // row.getCell(6).value = country;
-        row.commit();
-        i++;
-        // console.log(JSON.stringify(address));
-      }
-    }
-    fs.mkdir(tempFilePath, (err) => {
-      if (err) {
-        // console.log(err.message);
-        // console.log(err.code);
-        if (err.code === "EEXIST") {
-          console.log("Directory ALREADY Exists.");
-          return workbook.xlsx.writeFile(tempFilePath + fileName);
-        } else {
-          throw err;
+            // row.getCell(3).value = ;
+            // row.getCell(4).value = state;
+            // row.getCell(6).value = country;
+            row.commit();
+            
+            // console.log(JSON.stringify(address));
+          }
+        }catch(error){
+          console.log("errors where found at " + (i + 3));
+          populateErrors.push({name:address.Name, line: (e), fullAddress: address.street + "" + address.city});
+          console.log(populateErrors);
         }
+        i++;
+        e++;
       }
-      console.log("'/tmp' Directory was created.");
-      return workbook.xlsx.writeFile(tempFilePath + fileName);
-    });
-    // return workbook.xlsx.writeFile(tempFilePath + "legacyNew.xlsx");
-  })
+
+      fs.mkdir(tempFilePath, (err) => {
+        if (err) {
+          // console.log(err.message);
+          // console.log(err.code);
+          if (err.code === "EEXIST") {
+            console.log("Directory ALREADY Exists.");
+            workbook.xlsx.writeFile(tempFilePath + fileName); 
+            // console.log(populateErrors);
+            resolve(populateErrors);
+          } else {
+            throw err;
+            reject(err.code)
+          }
+        }else{
+          console.log("'/tmp' Directory was created.");
+          workbook.xlsx.writeFile(tempFilePath + fileName);
+          // console.log(populateErrors);
+          resolve(populateErrors);
+        }
+      });
+      // return workbook.xlsx.writeFile(tempFilePath + "legacyNew.xlsx");
+    })
+
+  });
+  
 }
 
 
