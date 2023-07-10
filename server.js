@@ -281,7 +281,7 @@ app.route(APP_DIRECTORY + "/fileUpload")
         if (extractFor != "print") {
           let fileNamePrefix = (extractFor === "roadWarrior") ? "RW - " : "R4M - ";
           let tempFileName = (fileNamePrefix + today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " " + req.user._id + '.xlsx').replace(/ /g, "_");
-          getData(upload.path, { loaded: loaded, attempted: attempted, delivered: delivered, extractFor: extractFor }).then(function (processedData) {
+          getData(upload.path, { loaded: loaded, attempted: attempted, delivered: delivered, extractFor: extractFor }).then(function (processedData) {            
             let addresses = processedData.addresses;
             let errors = processedData.errors;
             let read = addresses.length;
@@ -319,7 +319,18 @@ app.route(APP_DIRECTORY + "/fileUpload")
               });
 
             }
-          })
+          }).catch(err => {
+            console.log("Error Getting Data");
+            res.render("excellDownload.ejs", {
+            //uncomment fir local developement
+            // filePath: tempFilePath  + tempFileName,
+            // remote hosting version
+            filePath: "",
+            body: new Body("Download", "", ""),
+            errors: [{name:"", line: "Bad File Format", fullAddress: "Try again and make sure you are uploading a .CSV file not an .XLS or XLSX file"}],
+            user: req.user,
+          });
+        });
         } else {
           let tempFileName = (today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " -PRINT- " + req.user._id + '.xlsx').replace(/ /g, "_");
           // console.log("extract for print");
@@ -352,6 +363,7 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
         allBrands: null,
         updates:null,
         newBrands:null,
+        reportSummary:null,
         user: (req.user)? req.user : null,
       });
     }else{
@@ -366,54 +378,34 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
         let upload = files.loadXLS;
 
         getBrandsFromExcelDocument(upload.path).then(async function (data) {
-
-          if (data != "Error Getting Data"){
-            console.log("Records read: " + data.length);
+          // console.log(data);
+          if (data != "Error Getting Data" && data.brands.length > 0 ){
+            let brands = data.brands;
+            let report = data.report;
+            let reportSummary = data.reportSummary;
+            // console.log("Records read after promise: " + reportSummary.totalRead);
+            // console.log("New Brands FOund: " + reportSummary.totalBrands);
+            console.log(reportSummary);
             console.log("Checking for and Uploading New Brands ... ");
             let newUpdates = [];
             let newBrandsAdded = [];
             let allBrandsFound = [];
             var processedItem = 0;
 
-            await data.forEach(dataBrand => {
+            await brands.forEach(dataBrand => {
               allBrandsFound.push(dataBrand._id);
-              Brand.exists({_id:dataBrand._id}, async function (err,exists) {
-                if(exists){
-                  // console.log("Brand Already Exists Checking and Updating for Tracking Prefixes");
-                  await Brand.updateOne(
-                    { _id: dataBrand._id },
-                    { $addToSet: { trackingPrefixes: { $each: dataBrand.trackingPrefixes } } },
-                    function (err,updatedBrand) {
-                      // console.log(err);
-                      if(!err){
-                        if(updatedBrand.nModified > 0){
-                          console.log(dataBrand);
-                          console.log(dataBrand._id+" Modified succeffully");
-                            newUpdates.push(dataBrand._id);
-                        }else{
-                          // console.log("No new Prefixes to be added");
-                        }
-                      }else{
-                        console.log("Brand Update Failed");
-                        console.log(err);
-                      }
-                    }
-                  )
-                }else{
-                  console.log("New Brand Found, attempting upload");
-                  const newBrand = new Brand(dataBrand);
-                  newBrand.save(function(err,savedDoc){
-                    if(!err){
-                      console.log(newBrand);
-                      console.log(newBrand._id+" saved succeffully");
-                            newBrandsAdded.push(newBrand._id)
-                    }else{
-                        console.log("Failed to Save Brand");
-                        console.log(err);
 
-                    }
-                  });
-                }
+              // put a promis that will call mongo db and check for exists before returnning to continue
+
+              checkIfBrandExist(dataBrand).then(function(existResult) {
+                res.send(existResult);
+              }).catch((err)=> {
+                //add non existent brand and then continue
+                addBrand(err).then( (x) =>{
+
+                })
+                res.send(err);
+
               });
               
               processedItem++;
@@ -444,6 +436,7 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
                   allBrands: null,
                   updates: null,
                   newBrands: null,
+                  reportSummary: data.reportSummary,
                   user: (req.user) ? req.user : null,
                 });
           }
@@ -926,16 +919,18 @@ function getBrandsFromExcelDocument(filePath) {
   return new Promise(function (resolve, reject) {
     var data = {};
     // var allbrands = [];
-    var newBrands = [];
+    var brands = [];
     var report = [];
+    reportSummary = {};
     var workbook = new Excel.Workbook();
+    var totalRows = 0;
 
     workbook.xlsx.readFile(filePath).then(function () {
       var worksheet = workbook.getWorksheet(1);
       let i = 2;
       let brandCount = 0;
-      let totalRows = worksheet.rowCount;
-      // console.log(totalRows);
+      totalRows = worksheet.rowCount;
+      reportSummary.totalRead = totalRows;
 
       worksheet.eachRow(function (row, rowNumber) {
         // console.log('Row ' + rowNumber + ' = ' + JSON.stringify(row.values));
@@ -949,12 +944,14 @@ function getBrandsFromExcelDocument(filePath) {
         if (searchResult) {
           var includesTrackingPrefix = searchResult.trackingPrefixes.includes(trackingPrefix);
           if(!includesTrackingPrefix){
-            searchResult.trackingPrefixes.push(trackingPrefix)
+            searchResult.trackingPrefixes.push(trackingPrefix);
+            report.push({brand: brandName, tracking: trackingPrefix, action: "~ New Prefix"});
             console.log("new prefix for "+brandName+"  --> '"+ trackingPrefix +"' added for data Collection");
           }
         }else{
           // console.log(".... FOUND NEW BRAND ...")
           brands.push({_id: brandName, trackingPrefixes:[trackingPrefix]});
+            report.push({brand: brandName, tracking: trackingPrefix, action: "+ New Brand"});
           brandCount++;
           // console.log(searchResult);
           // console.log("brands array length => " + searchResult.length);
@@ -966,15 +963,16 @@ function getBrandsFromExcelDocument(filePath) {
       
 
       if (brands) {
-        console.log("Data Processing Done . . . ");
+        reportSummary.totalBrands = brands.length;
+        // console.log("Data Processing Done . . . ");
         // console.log("BrandCounter = " + brandCount);
-        console.log("Brand Array = " + brands.length);
-        // console.log( brands);
-        resolve(brands);
+        // console.log("Total Rows Read: " + totalRows);
+        // console.log("New Brands = " + brands.length);
+        resolve({brands: brands, report: report, reportSummary});
         // res.redirect(APP_DIRECTORY + "/brandsUpload")
       } else {
         // res.redirect(APP_DIRECTORY + "/")
-        console.log("Total Brand Count = " + brandCount);
+        // console.log("Total Brand Count = " + brandCount);
         reject("Error Getting Data");
       }
 
@@ -1230,6 +1228,65 @@ async function cacheBrands(){
   // file written successfully
   console.log("Brands written to file");
 });
+}
+
+async function checkIfBrandExist(dataBrand){
+  return new Promise(function(resolve, reject){
+    Brand.exists({_id:dataBrand._id}, async function (err,exists) {
+      if(!err){
+      if(!exists){
+        console.log("Does not exist");
+        resolve(exisits)
+        /*
+        // console.log("Brand Already Exists Checking and Updating for Tracking Prefixes");
+        await Brand.updateOne(
+          { _id: dataBrand._id },
+          { $addToSet: { trackingPrefixes: { $each: dataBrand.trackingPrefixes } } },
+          function (err,updatedBrand) {
+            // console.log(err);
+            if(!err){
+              if(updatedBrand.nModified > 0){
+                console.log(dataBrand);
+                console.log(dataBrand._id+" Modified succeffully");
+                  newUpdates.push(dataBrand._id);
+              }else{
+                // console.log("No new Prefixes to be added");
+              }
+            }else{
+              console.log("Brand Update Failed");
+              console.log(err);
+            }
+          }
+        )
+        */
+      }else{
+        console.log("does not exisits");
+        reject("NOTEXIST")
+        /*
+        console.log("New Brand Found, attempting upload");
+        const newBrand = new Brand(dataBrand);
+        newBrand.save(function(err,savedDoc){
+          if(!err){
+            console.log(newBrand);
+            console.log(newBrand._id+" saved succeffully");
+                  newBrandsAdded.push(newBrand._id)
+          }else{
+              console.log("Failed to Save Brand");
+              console.log(err);
+
+          }
+        });
+        */
+      }
+    }
+    });
+  })
+}
+
+async function addBrand(brand) {
+  return new Promise(function (resolve, reject) {
+    
+  });
 }
 
 async function clearTempFolder(){

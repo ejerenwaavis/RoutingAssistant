@@ -6,7 +6,24 @@
       enctype="multipart/form-data">
 
       <!-- <%= ((allBrands)? allBrands : "NONE") %> -->
-      <dl class="row">
+      
+      <% if(reportSummary){ %>
+        <div class="alert alert-secondary alert-dismissible fade show d-flex align-items-center" role="alert">
+          <div class="d-block ps-4">
+            <i class="fa fa-info-circle" aria-hidden="true"></i>
+      
+            <!-- <p class="row text-center">Summary</p> -->
+              <p class="row "> 
+                <!-- <strong>Line: <%= reportSummary %></strong> -->
+                Total Records Read: <%= reportSummary.totalRead %>, Added/Modified : <%= reportSummary.totalBrands %>
+              </p>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      
+        </div>
+        <% } %>
+      
+      <!-- <dl class="row">
         <% if((updates)? (updates.length > 0) : false){%>
           <dt class="col-sm-3 ">Updates</dt>
           <dd class="col-sm-9 mb-4">
@@ -31,7 +48,7 @@
             </ul>
           </dd>
           <%}%>
-      </dl>
+      </dl> -->
       
 
       <!-- <img class="mb-4" src="/docs/5.0/assets/brand/bootstrap-logo.svg" alt="" width="72" height="57"> -->
