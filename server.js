@@ -321,12 +321,12 @@ app.route(APP_DIRECTORY + "/fileUpload")
             }
           }).catch(err => {
             console.log("Error Getting Data");
-            res.render("excellDownload.ejs", {
+            res.render("home.ejs", {
             //uncomment fir local developement
             // filePath: tempFilePath  + tempFileName,
             // remote hosting version
             filePath: "",
-            body: new Body("Download", "", ""),
+            body: new Body("Download", "Error Getting Data: Try again and make sure you are uploading a .CSV file not an .XLS or XLSX file", ""),
             errors: [{name:"", line: "Bad File Format", fullAddress: "Try again and make sure you are uploading a .CSV file not an .XLS or XLSX file"}],
             user: req.user,
           });
