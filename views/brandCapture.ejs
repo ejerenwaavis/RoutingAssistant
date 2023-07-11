@@ -5,7 +5,6 @@
     <form id="brandsFileUpload" action="<%= body.domain %>/brandsFileUpload" method="post"
       enctype="multipart/form-data">
 
-      <!-- <%= ((allBrands)? allBrands : "NONE") %> -->
       
       <% if(reportSummary){ %>
         <div class="alert alert-secondary alert-dismissible fade show d-flex align-items-center" role="alert">
@@ -15,14 +14,46 @@
             <!-- <p class="row text-center">Summary</p> -->
               <p class="row "> 
                 <!-- <strong>Line: <%= reportSummary %></strong> -->
-                Total Records Read: <%= reportSummary.totalRead %>, Added/Modified : <%= reportSummary.totalBrands %>
+                Total Records Read: <%= reportSummary.totalRead %>, Added/Modified : <a href="" data-bs-toggle="modal" data-bs-target="#reportModal"><%= reportSummary.totalBrands %></a>
               </p>
           </div>
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-      
+        </div>
+
+        <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="`Label" aria-hidden="true">
+
+          <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+              <div class="modal-header">
+                <p class="modal-title fs-2" id="reportModalLabel">Detailed Upload Report</p>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <p> <strong> New Brands </strong></p>
+                <% report.forEach(item => { %>
+                  <% if(item.action != '~ New Prefix'){%>
+                  <p><%= item.brand %> : [<%= item.tracking %>] </p>
+                  <%}%>
+                <% }) %>
+
+                <p class="mt-3"> <strong> Modifications </strong></p>
+                <% report.forEach(item=> { %>
+                  <% if(item.action === '~ New Prefix' ){%>
+                    <p>
+                      <%= item.brand %> : [<%= item.tracking %>]
+                    </p>
+                  <%}%>
+                <% }) %>
+              </div>
+
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              </div>
+            </div>
+          </div>
         </div>
         <% } %>
-      
+        
       <!-- <dl class="row">
         <% if((updates)? (updates.length > 0) : false){%>
           <dt class="col-sm-3 ">Updates</dt>

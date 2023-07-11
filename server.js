@@ -357,7 +357,8 @@ app.route(APP_DIRECTORY + "/fileUpload")
 
 app.route(APP_DIRECTORY + "/brandsFileUpload")
   .get(function (req, res){
-    if (req.isAuthenticated() || req.hostname.includes("localhost") ) {
+    if ((req.isAuthenticated() && req.user.isProUser) || req.hostname.includes("localhost") ) {
+      console.log(req.user.isProUser);
       res.render("brandCapture.ejs", {
         body: new Body("Brands Upload - TCS", "", ""),
         allBrands: null,
@@ -367,8 +368,12 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
         user: (req.user)? req.user : null,
       });
     }else{
-      console.log("Unauthenticated Request ");
-      res.redirect(APP_DIRECTORY + "/");
+      console.log("Unauthenticated Access / Request ");
+      
+      res.render("home.ejs", {
+        body: new Body("Upload", "Admin Access Only", ""),
+        user: req.user,
+      });
     }
   })
   .post(function (req, res) {
@@ -379,66 +384,69 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
 
         getBrandsFromExcelDocument(upload.path).then(async function (data) {
           // console.log(data);
-          if (data != "Error Getting Data" && data.brands.length > 0 ){
-            let brands = data.brands;
-            let report = data.report;
-            let reportSummary = data.reportSummary;
-            // console.log("Records read after promise: " + reportSummary.totalRead);
-            // console.log("New Brands FOund: " + reportSummary.totalBrands);
-            console.log(reportSummary);
-            console.log("Checking for and Uploading New Brands ... ");
-            let newUpdates = [];
-            let newBrandsAdded = [];
-            let allBrandsFound = [];
-            var processedItem = 0;
+          if (data != "Error Getting Data" ){
+              if(data.brands.length > 0 ){
+              let brands = data.brands;
+              let report = data.report;
+              let reportSummary = data.reportSummary;
+              // console.log("Records read after promise: " + reportSummary.totalRead);
+              // console.log("New Brands FOund: " + reportSummary.totalBrands);
+              // console.log(reportSummary);
+              // console.log(report);
+              console.log("Checking for and Uploading New Brands ... ");
+              // let newUpdates = [];
+              // let newBrandsAdded = [];
+              // let allBrandsFound = [];
+              // var processedItem = 0;
 
-            await brands.forEach(dataBrand => {
-              allBrandsFound.push(dataBrand._id);
-
-              // put a promis that will call mongo db and check for exists before returnning to continue
-
-              checkIfBrandExist(dataBrand).then(function(existResult) {
-                res.send(existResult);
-              }).catch((err)=> {
-                //add non existent brand and then continue
-                addBrand(err).then( (x) =>{
-
-                })
-                res.send(err);
-
-              });
-              
-              processedItem++;
-              
-              if(processedItem >= data.length){
-                console.log("Data Length " + data.length);
-                console.log("processedItem : "+ processedItem);
-                console.log("\n------\nAll Brands Processed");
-                console.log(allBrandsFound);
-                console.log("\n------\nUpdated Brands");
-                console.log(newUpdates);
-                console.log("\n------\nNew Brands Added");
-                console.log(newBrandsAdded);
-                cacheBrands();
+              processBrandUpdates(brands).then(result => {
+                // console.log(result);
                 res.render("brandCapture.ejs", {
                   body: new Body("Brands Upload - LSAsistant", "", "Brand Updates Done"),
-                  allBrands: allBrandsFound,
-                  updates: newUpdates,
-                  newBrands: newBrandsAdded,
+                  // allBrands: allBrandsFound,
+                  updates: result.modifiedBrands,
+                  newBrands: result.newBrands,
+                  reportSummary: data.reportSummary,
+                  report: report,
                   user: (req.user) ? req.user : null,
                 });
-              }
-            });
-            
-          }else{
-            res.render("brandCapture.ejs", {
-                  body: new Body("Brands Upload - LSAsistant", "Error Readidng Data", ""),
+                cacheBrands();
+              }).catch(err => {
+                console.log(err);
+                res.render("brandCapture.ejs", {
+                  body: new Body("Brands Upload", "Error Perfoming Update/Addition", ""),
                   allBrands: null,
                   updates: null,
                   newBrands: null,
                   reportSummary: data.reportSummary,
+                  report: report,
                   user: (req.user) ? req.user : null,
                 });
+              })
+              
+            }else{
+              console.log("No New Brands or Uodates");
+              res.render("brandCapture.ejs", {
+              body: new Body("Brands Upload", "Error Readidng Data", ""),
+              allBrands: null,
+              updates: null,
+              newBrands: null,
+              reportSummary: data.reportSummary,
+              report: data.report,
+              user: (req.user) ? req.user : null,
+            });
+            }
+            
+          }else{
+            res.render("brandCapture.ejs", {
+              body: new Body("Brands Upload", "Error Readidng Data", ""),
+              allBrands: null,
+              updates: null,
+              newBrands: null,
+              reportSummary: null,
+              report: null,
+              user: (req.user) ? req.user : null,
+            });
           }
         });
       });
@@ -575,10 +583,10 @@ app.route(APP_DIRECTORY + "/googleLoggedin")
 
 app.route(APP_DIRECTORY + "/logout")
   .get(function (req, res) {
-    req.logout();
-    console.log("Logged Out");
-    res.redirect(APP_DIRECTORY + "/");
-
+    req.logout(function(err) {
+      if (err) { return next(err); }
+      res.redirect(APP_DIRECTORY + "/");
+    });
   });
 
 app.route(APP_DIRECTORY + "/register")
@@ -804,7 +812,6 @@ async function getData(filePath, options) {
           // console.log(parsedJSON.data[i][1]);
           // console.log("*****");
           if (parsedJSON.data[i][1] === options.loaded || parsedJSON.data[i][1] === options.attempted || parsedJSON.data[i][1] === options.delivered) {
-            
                 tempSplitAddress = (parsedJSON.data[i][3] + "").split(".");
                 let splitAddress;
                 if (tempSplitAddress.includes(" US")) {
@@ -945,13 +952,14 @@ function getBrandsFromExcelDocument(filePath) {
           var includesTrackingPrefix = searchResult.trackingPrefixes.includes(trackingPrefix);
           if(!includesTrackingPrefix){
             searchResult.trackingPrefixes.push(trackingPrefix);
+            brands.push(searchResult);
             report.push({brand: brandName, tracking: trackingPrefix, action: "~ New Prefix"});
             console.log("new prefix for "+brandName+"  --> '"+ trackingPrefix +"' added for data Collection");
           }
         }else{
           // console.log(".... FOUND NEW BRAND ...")
           brands.push({_id: brandName, trackingPrefixes:[trackingPrefix]});
-            report.push({brand: brandName, tracking: trackingPrefix, action: "+ New Brand"});
+          report.push({brand: brandName, tracking: trackingPrefix, action: "+ New Brand"});
           brandCount++;
           // console.log(searchResult);
           // console.log("brands array length => " + searchResult.length);
@@ -1230,62 +1238,128 @@ async function cacheBrands(){
 });
 }
 
-async function checkIfBrandExist(dataBrand){
-  return new Promise(function(resolve, reject){
-    Brand.exists({_id:dataBrand._id}, async function (err,exists) {
-      if(!err){
-      if(!exists){
-        console.log("Does not exist");
-        resolve(exisits)
-        /*
-        // console.log("Brand Already Exists Checking and Updating for Tracking Prefixes");
-        await Brand.updateOne(
-          { _id: dataBrand._id },
-          { $addToSet: { trackingPrefixes: { $each: dataBrand.trackingPrefixes } } },
-          function (err,updatedBrand) {
-            // console.log(err);
-            if(!err){
-              if(updatedBrand.nModified > 0){
-                console.log(dataBrand);
-                console.log(dataBrand._id+" Modified succeffully");
-                  newUpdates.push(dataBrand._id);
-              }else{
-                // console.log("No new Prefixes to be added");
-              }
-            }else{
-              console.log("Brand Update Failed");
-              console.log(err);
-            }
-          }
-        )
-        */
-      }else{
-        console.log("does not exisits");
-        reject("NOTEXIST")
-        /*
-        console.log("New Brand Found, attempting upload");
-        const newBrand = new Brand(dataBrand);
-        newBrand.save(function(err,savedDoc){
-          if(!err){
-            console.log(newBrand);
-            console.log(newBrand._id+" saved succeffully");
-                  newBrandsAdded.push(newBrand._id)
-          }else{
-              console.log("Failed to Save Brand");
-              console.log(err);
 
-          }
-        });
-        */
+async function processBrandUpdates(brands){
+  return new Promise((resolve,reject) => {
+    
+    newBrands = [];
+    modifiedBrands = [];
+
+    brands.forEach(brand => {
+    
+     // put a promis that will call mongo db and check for exists before returnning to continue
+
+      checkIfBrandExist(brand).then(function(exists) {
+        // console.log("BrandFOund: ");
+        // console.log(existResult);
+        if(!exists){
+          addBrand(brand).then( (x) =>{
+            newBrands.push({_id: x._id, trackingPrefix: x.trackingPrefixes});
+            console.log("Successsfully Added Brand");
+            console.log(brand);
+            // console.log(x);
+            // resolve(x);
+          }).catch((err) => {
+            console.log("Failed rto add Brand");
+            // console.log(err);
+            // resolve(err);
+          })
+        }else{
+          updateBrand(brand).then((updatedBrand) => {
+            modifiedBrands.push({_id: updatedBrand._id, trackingPrefix: updatedBrand.updatedBrand});
+            console.log(updatedBrand);
+            // res.send(updatedBrand);
+          }).catch(err =>{
+            console.log(err);
+            // resolve(err);
+          })
+        }
+      }).catch((err)=> {
+        //add non existent brand and then continue
+        console.log("***");
+        console.log(err.message);
+        reject(err.message);
+      });
+      
+    });
+    console.log("Done Processing....pushing back to main thread");
+    resolve({modifiedBrands: modifiedBrands, newBrands:newBrands});
+  })
+}
+
+
+async function checkIfBrandExist(brand){
+  return new Promise(function(resolve, reject){
+    Brand.exists({_id:brand._id}, async function (err,exists) {
+      if(!err){
+        // console.log("Exists function");
+        // console.log(exists);
+        resolve(exists);
+        
+      }else{
+        reject("EEXISTSFAILED")
       }
-    }
     });
   })
 }
 
+
 async function addBrand(brand) {
   return new Promise(function (resolve, reject) {
     
+    // console.log(brand);
+
+    // console.log("Attempting Adding Brand");
+    const newBrand = new Brand(brand);
+    newBrand.save(function(err,savedDoc){
+      if(!err){
+        // console.log(savedDoc);
+        // console.log(newBrand._id+" saved succeffully");
+        resolve(savedDoc);
+      }else{
+          // console.log("Failed to Save Brand");
+          console.log(err.message);
+          // console.log("err.code");
+          // console.log(err.code);
+          reject(err.message)
+      }
+    });
+
+    // console.log("Brand Already Exists Checking and Updating for Tracking Prefixes");
+
+  });
+}
+
+
+async function updateBrand(brand) {
+  return new Promise(function (resolve, reject) {
+    
+    // console.log("Brand Already Exists Checking and Updating for Tracking Prefixes");
+    Brand.updateOne(
+      { _id: brand._id },
+      { $addToSet: { trackingPrefixes: { $each: brand.trackingPrefixes } } },
+      function (err,updatedBrand) {
+        // console.log(err);
+        if(!err){
+          if(updatedBrand.nModified > 0){
+            // console.log("Brand");
+            // console.log(brand);
+            // console.log("Updated Brand");
+            // console.log(updatedBrand);
+            console.log(brand._id+" Modified succeffully");
+            resolve(brand);
+          }else{
+            reject("ENOPREFIX");
+            // console.log("No new Prefixes to be added");
+          }
+        }else{
+          console.log("Brand Update Failed");
+          console.log(err);
+          reject("EFAILEDTOUPDATE")
+        }
+      }
+    )
+
   });
 }
 

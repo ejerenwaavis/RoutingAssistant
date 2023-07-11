@@ -52,7 +52,7 @@
 <body class="text-center">
 
 
-  
+
   <% if(body.title !=="Account" ){%>
     <%if(user){%>
       <div class="my-4 fixed-top">
@@ -74,7 +74,9 @@
           <li><a class="dropdown-item" href="<%= body.domain %>/logout">Log Out <i class="fas fa-sign-out-alt"></i></a>
           </li>
           <hr>
-          <li><a class="dropdown-item" href="<%= body.domain %>/brandsFileUpload">Brand Upload</a></li>
+          <% if(user.isProUser) {%>
+            <li><a class="dropdown-item" href="<%= body.domain %>/brandsFileUpload">Brand Upload</a></li>
+            <% } %>
         </ul>
       </div>
       <%}%>
@@ -90,3 +92,20 @@
             <!-- *******************DOMAIN HANDLING*************************** -->
             <span class="d-none" id="domain" domain="<%= body.domain %>">
             </span>
+
+            <% if(body.error){ %>
+              <% if(body.error != "Incorrect password." ){ %>
+
+                <div class="alert alert-warning alert-dismissible fade show d-flex align-items-center" role="alert">
+                  <div class="d-block ps-4">
+                    <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+
+                    <!-- <p class="row text-center">Summary</p> -->
+                    <p class="row ">
+                      <%= body.error %>
+                    </p>
+                  </div>
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                <% } %>
+              <% } %>
