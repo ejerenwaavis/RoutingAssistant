@@ -70,7 +70,8 @@
         </a>
         <ul class="dropdown-menu" aria-labelledby="dropdownMenuLink">
           <li><a class="dropdown-item" href="https://triumphcourier.com/">TCS Home</a></li>
-          <li><a class="dropdown-item" href="<%= body.domain %>/profile">Acount</a></li>
+          <li><a class="dropdown-item" href="<%= body.domain %>/">File Upload</a></li>
+          <!-- <li><a class="dropdown-item" href="<%= body.domain %>/profile">Acount</a></li> -->
           <li><a class="dropdown-item" href="<%= body.domain %>/logout">Log Out <i class="fas fa-sign-out-alt"></i></a>
           </li>
           <hr>
@@ -92,20 +93,5 @@
             <!-- *******************DOMAIN HANDLING*************************** -->
             <span class="d-none" id="domain" domain="<%= body.domain %>">
             </span>
-
-            <% if(body.error){ %>
-              <% if(body.error != "Incorrect password." ){ %>
-
-                <div class="alert alert-warning alert-dismissible fade show d-flex align-items-center" role="alert">
-                  <div class="d-block ps-4">
-                    <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
-
-                    <!-- <p class="row text-center">Summary</p> -->
-                    <p class="row ">
-                      <%= body.error %>
-                    </p>
-                  </div>
-                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-                <% } %>
-              <% } %> 
+ 
+           

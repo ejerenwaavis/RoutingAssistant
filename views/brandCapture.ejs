@@ -5,6 +5,13 @@
     <form id="brandsFileUpload" action="<%= body.domain %>/brandsFileUpload" method="post"
       enctype="multipart/form-data">
 
+      <% if(body.error){%>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+          <!-- <strong>Holy guacamole!</strong>  -->
+          <%= body.error%>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      <%}%>
       
       <% if(reportSummary){ %>
         <div class="alert alert-secondary alert-dismissible fade show d-flex align-items-center" role="alert">

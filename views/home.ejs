@@ -3,6 +3,30 @@
 
   <main class="form-signin">
     <form id="fileUpload" action="<%= body.domain %>/fileUpload" method="post" enctype="multipart/form-data">
+      
+      <% if(body.error){ %>
+        <% if(body.error !="Incorrect password." ){ %>
+          <div class="d-block">
+            <div class="row">
+              <div class=""> </div>
+      
+      
+              <div class="alert alert-warning alert-dismissible fade show d-flex align-items-center" role="alert">
+                <div class="d-block ps-4">
+                  <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+      
+                  <!-- <p class="row text-center">Summary</p> -->
+                  <p class="row ">
+                    <%= body.error %>
+                  </p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            </div>
+          </div>
+          <% } %>
+            <% } %>
+      
       <!-- <img class="mb-4" src="/docs/5.0/assets/brand/bootstrap-logo.svg" alt="" width="72" height="57"> -->
       <h1 class="h3 mb-1 fw-normal">Upload Eli.CSV</h1>
       <p><small>upload the exported manifest <i class="fas fa-question"></i> </small></p>

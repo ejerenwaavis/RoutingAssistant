@@ -358,7 +358,7 @@ app.route(APP_DIRECTORY + "/fileUpload")
 app.route(APP_DIRECTORY + "/brandsFileUpload")
   .get(function (req, res){
     if ((req.isAuthenticated() && req.user.isProUser) || req.hostname.includes("localhost") ) {
-      console.log(req.user.isProUser);
+      // console.log(req.user.isProUser);
       res.render("brandCapture.ejs", {
         body: new Body("Brands Upload - TCS", "", ""),
         allBrands: null,
@@ -427,7 +427,7 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
             }else{
               console.log("No New Brands or Uodates");
               res.render("brandCapture.ejs", {
-              body: new Body("Brands Upload", "Error Readidng Data", ""),
+              body: new Body("Brands Upload", "", ""),
               allBrands: null,
               updates: null,
               newBrands: null,
