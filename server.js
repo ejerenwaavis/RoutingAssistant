@@ -357,23 +357,30 @@ app.route(APP_DIRECTORY + "/fileUpload")
 
 app.route(APP_DIRECTORY + "/brandsFileUpload")
   .get(function (req, res){
-    if ((req.isAuthenticated() && req.user.isProUser) || req.hostname.includes("localhost") ) {
+    if (req.isAuthenticated() || req.hostname.includes("localhost") ) {
       // console.log(req.user.isProUser);
-      res.render("brandCapture.ejs", {
-        body: new Body("Brands Upload - TCS", "", ""),
-        allBrands: null,
-        updates:null,
-        newBrands:null,
-        reportSummary:null,
-        user: (req.user)? req.user : null,
-      });
+      let isProUser = (req.user)? req.user.isProUser : false;
+      if(isProUser || req.hostname.includes("localhost")){
+
+        res.render("brandCapture.ejs", {
+          body: new Body("Brands Upload - TCS", "", ""),
+          allBrands: null,
+          updates:null,
+          newBrands:null,
+          reportSummary:null,
+          user: (req.user)? req.user : null,
+        });
+      }else{
+        console.log("Unauthorized Access ");
+        
+        res.render("home.ejs", {
+          body: new Body("Upload", "Admin Access Only", ""),
+          user: req.user,
+        });  
+      }
     }else{
-      console.log("Unauthenticated Access / Request ");
-      
-      res.render("home.ejs", {
-        body: new Body("Upload", "Admin Access Only", ""),
-        user: req.user,
-      });
+      console.log("Unauthenticated Request ");
+      res.redirect("/");
     }
   })
   .post(function (req, res) {
