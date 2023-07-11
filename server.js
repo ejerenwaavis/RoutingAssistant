@@ -361,7 +361,7 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
       // console.log(req.user.isProUser);
       let isProUser = (req.user)? req.user.isProUser : false;
       if(isProUser || req.hostname.includes("localhost")){
-
+        // cacheBrands
         res.render("brandCapture.ejs", {
           body: new Body("Brands Upload - TCS", "", ""),
           allBrands: null,
@@ -429,6 +429,7 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
                   report: report,
                   user: (req.user) ? req.user : null,
                 });
+                cacheBrands();
               })
               
             }else{
@@ -442,6 +443,7 @@ app.route(APP_DIRECTORY + "/brandsFileUpload")
               report: data.report,
               user: (req.user) ? req.user : null,
             });
+                cacheBrands();
             }
             
           }else{
@@ -745,7 +747,8 @@ app.post(APP_DIRECTORY + '/create-checkout-session', async (req, res) => {
 app.listen(process.env.PORT || 3025, function () {
   clearTempFolder();
   cacheBrands();
-  console.log("RoutingAssistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3025));
+  console.error("RoutingAssistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3025));
+  // console.log("RoutingAssistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3025));
   // print("./")
 });
 
@@ -1240,6 +1243,7 @@ async function cacheBrands(){
   if (err) {
     console.error(err);
   }
+  
   // file written successfully
   console.log("Brands written to file");
 });
