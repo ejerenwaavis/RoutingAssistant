@@ -1245,7 +1245,7 @@ async function cacheBrands(){
   }
   
   // file written successfully
-  console.log("Brands written to file");
+  console.error("Brands written to file");
 });
 }
 
