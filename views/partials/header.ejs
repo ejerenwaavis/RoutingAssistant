@@ -74,8 +74,8 @@
           <!-- <li><a class="dropdown-item" href="<%= body.domain %>/profile">Acount</a></li> -->
           <li><a class="dropdown-item" href="<%= body.domain %>/logout">Log Out <i class="fas fa-sign-out-alt"></i></a>
           </li>
-          <hr>
           <% if(user.isProUser) {%>
+            <hr>
             <li><a class="dropdown-item" href="<%= body.domain %>/brandsFileUpload">Brand Upload</a></li>
             <% } %>
         </ul>
