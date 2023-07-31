@@ -748,8 +748,6 @@ app.listen(process.env.PORT || 3025, function () {
   clearTempFolder();
   cacheBrands();
   console.error("RoutingAssistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3025));
-  // console.log("RoutingAssistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3025));
-  // print("./")
 });
 
 
@@ -944,16 +942,35 @@ function getBrandsFromExcelDocument(filePath) {
 
     workbook.xlsx.readFile(filePath).then(function () {
       var worksheet = workbook.getWorksheet(1);
+      var headerRow = worksheet.getRow(1)
+      var customerCell;
+      var barcodeCell;
+
+      headerRow.eachCell(function(cell, colNumber) {
+        if((cell.value).toLowerCase() === "customer"){
+          customerCell = colNumber
+        }
+
+        if((cell.value).toLowerCase() === "barcode"){
+          barcodeCell = colNumber
+        }
+        
+      });
+      
+      // console.log('Barcode Cell is:  ' + barcodeCell + ' ||  Customer Cell is:  ' + customerCell);
+
       let i = 2;
       let brandCount = 0;
       totalRows = worksheet.rowCount;
       reportSummary.totalRead = totalRows;
 
+
+    if(barcodeCell && customerCell){
       worksheet.eachRow(function (row, rowNumber) {
         // console.log('Row ' + rowNumber + ' = ' + JSON.stringify(row.values));
-        let tracking = row.getCell(2) + "";
+        let tracking = row.getCell(barcodeCell) + "";
         let trackingPrefix = tracking.substring(0,7);
-        let brandName = row.getCell(5) + "";
+        let brandName = row.getCell(customerCell) + "";
         // let searchResult = brands.filter(function(b) { return b.brandName === brandName; });
         let searchResult = allBrands.find(e => e._id === brandName);
         // console.log(brandName +" -- "+ trackingPrefix);
@@ -977,6 +994,9 @@ function getBrandsFromExcelDocument(filePath) {
           // console.log("Searched Brand Includes TrackingPrefix? " +brands[brandCount].trackingPrefix.includes(trackingPrefix));
         }
       });
+    }else{
+      reject("Unable to determine Customer Columm or Barcode Columm");
+    }
 
       
 
@@ -986,11 +1006,15 @@ function getBrandsFromExcelDocument(filePath) {
         // console.log("BrandCounter = " + brandCount);
         // console.log("Total Rows Read: " + totalRows);
         // console.log("New Brands = " + brands.length);
+
+        // console.log("Will Not RESOLVE GetBrands from Excell -- developmenet + ");
         resolve({brands: brands, report: report, reportSummary});
+        
         // res.redirect(APP_DIRECTORY + "/brandsUpload")
       } else {
         // res.redirect(APP_DIRECTORY + "/")
         // console.log("Total Brand Count = " + brandCount);
+        // console.log("Wont REJECT either GetBrands from Excell -- developmenet + ");
         reject("Error Getting Data");
       }
 
@@ -1271,8 +1295,8 @@ async function processBrandUpdates(brands){
             // console.log(x);
             // resolve(x);
           }).catch((err) => {
-            console.log("Failed rto add Brand");
-            // console.log(err);
+            console.log("Failed to add Brand");
+            console.log(err.message);
             // resolve(err);
           })
         }else{
@@ -1308,7 +1332,7 @@ async function checkIfBrandExist(brand){
         resolve(exists);
         
       }else{
-        reject("EEXISTSFAILED")
+        reject({description: "Failed to Check if document exists", message:"EEXISTSFAILED"})
       }
     });
   })
@@ -1329,10 +1353,10 @@ async function addBrand(brand) {
         resolve(savedDoc);
       }else{
           // console.log("Failed to Save Brand");
-          console.log(err.message);
+          // console.log(err.message);
           // console.log("err.code");
           // console.log(err.code);
-          reject(err.message)
+          reject(err)
       }
     });
 
