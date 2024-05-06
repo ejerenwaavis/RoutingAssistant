@@ -252,7 +252,7 @@ passport.use(new GoogleStrategy({
 app.route(APP_DIRECTORY + "/")
   .get(function (req, res) {
     // print(tempFilePath);
-    if (req.isAuthenticated()) {
+    if (req.isAuthenticated() && req.user.verified) {
       res.render("home.ejs", {
         body: new Body("Upload", "", ""),
         user: req.user,
@@ -264,7 +264,7 @@ app.route(APP_DIRECTORY + "/")
 
 app.route(APP_DIRECTORY + "/fileUpload")
   .post(async function (req, res) {
-    if (req.isAuthenticated()) {
+    if (req.isAuthenticated() && req.user.verified) {
       if(allBrands.length<1){
         cacheBrands();
       }
@@ -368,7 +368,7 @@ app.route(APP_DIRECTORY + "/fileUpload")
 
 app.route(APP_DIRECTORY + "/brandsFileUpload")
   .get(function (req, res){
-    if (req.isAuthenticated() || req.hostname.includes("localhost") ) {
+    if ((req.isAuthenticated() && req.user.verified )|| req.hostname.includes("localhost") ) {
       // console.log(req.user.isProUser);
       let isProUser = (req.user)? req.user.isProUser : false;
       if(isProUser || req.hostname.includes("localhost")){
@@ -489,7 +489,7 @@ app.route(APP_DIRECTORY + "/delete")
 
 app.route(APP_DIRECTORY + "/profile")
   .get(function (req, res) {
-    if (req.isAuthenticated()) {
+    if (req.isAuthenticated() && req.user.verified) {
       res.render("profile", { user: req.user, body: new Body("Account", "", "") });
     } else {
       res.redirect(APP_DIRECTORY + "/");
@@ -501,13 +501,13 @@ app.route(APP_DIRECTORY + "/profile")
 /****************** Authentication *******************/
 app.route(APP_DIRECTORY + "/login")
   .get(function (req, res) {
-    if (req.isAuthenticated()) {
+    if (req.isAuthenticated() && req.user.verified) {
       // console.log("Authenticated Request");
       res.redirect(APP_DIRECTORY + "/")
     } else {
       // console.log("Unauthorized Access, Please Login");
       res.render("login", {
-        body: new Body("Login", "", ""),
+        body: new Body("Login", "UnAuthorized Access", ""),
         login: null,
         user: req.user,
       });
