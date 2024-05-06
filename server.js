@@ -269,20 +269,30 @@ app.route(APP_DIRECTORY + "/fileUpload")
         cacheBrands();
       }
       var form = new formidable.IncomingForm();
-      form.parse(req, function (err, fields, files) {
+      form.parse(req, async function (err, fields, files) {
         let upload = files.elicsv;
         let loaded = (fields.loaded) ? "Loaded" : false;
         let attempted = (fields.attempted) ? "Attempted" : false;
         let delivered = (fields.delivered) ? "Delivered" : false;
         let extractFor = fields.extractFor;
         // populateErrors = [];
+        // console.log(upload.type);
 
         let today = new Date;
 
         if (extractFor != "print") {
           let fileNamePrefix = (extractFor === "roadWarrior") ? "RW - " : "R4M - ";
           let tempFileName = (fileNamePrefix + today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " " + req.user._id + '.xlsx').replace(/ /g, "_");
-          getData(upload.path, { loaded: loaded, attempted: attempted, delivered: delivered, extractFor: extractFor }).then(function (processedData) {            
+          // 
+          let processedData;
+
+          
+          try {            
+            if(upload.type.includes("spreadsheetml.sheet") || upload.type.includes("openxmlformats")){
+              processedData  = await getAddressesFromExcelDocument(upload.path);
+            }else{
+              processedData  = await getData(upload.path, { loaded: loaded, attempted: attempted, delivered: delivered, extractFor: extractFor });
+            }
             let addresses = processedData.addresses;
             let errors = processedData.errors;
             let read = addresses.length;
@@ -320,19 +330,19 @@ app.route(APP_DIRECTORY + "/fileUpload")
               });
 
             }
-          }).catch(err => {
-            console.log("Error Getting Data");
-            res.render("home.ejs", {
-            //uncomment fir local developement
-            // filePath: tempFilePath  + tempFileName,
-            // remote hosting version
-            filePath: "",
-            body: new Body("Download", "Error Getting Data: Try again and make sure you are uploading a .CSV file not an .XLS or XLSX file", ""),
-            errors: [{name:"", line: "Bad File Format", fullAddress: "Try again and make sure you are uploading a .CSV file not an .XLS or XLSX file"}],
-            user: req.user,
-          });
-        });
-        } else {
+          }catch(err){
+              console.log("Error Getting Data");
+              res.render("home.ejs", {
+              //uncomment fir local developement
+              // filePath: tempFilePath  + tempFileName,
+              // remote hosting version
+              filePath: "",
+              body: new Body("Download", "Error Getting Data: Try again and make sure you are uploading the appropriate file (.CSV file or an .XLS/XLSX) from your export", ""),
+              errors: [{name:"", line: "Bad File Format", fullAddress: "Try again and make sure you are uploading a .CSV file not an .XLS or XLSX file"}],
+              user: req.user,
+            });
+          }
+        }else{
           let tempFileName = (today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " -PRINT- " + req.user._id + '.xlsx').replace(/ /g, "_");
           // console.log("extract for print");
           getDataForPrint(upload.path, { loaded: loaded, attempted: attempted, extractFor: extractFor }).then(function (addresses) {
@@ -1033,6 +1043,110 @@ function getBrandsFromExcelDocument(filePath) {
   });
 }
 
+async function getAddressesFromExcelDocument(filePath) {
+  return new Promise(async function (resolve, reject) {
+    var data = {};
+    // var allbrands = [];
+    var arrayOfAddress = [];
+    var report = [];
+    var errors = [];
+    reportSummary = {};
+    var workbook = new Excel.Workbook();
+    var totalRows = 0;
+
+    workbook.xlsx.readFile(filePath).then(function () {
+      var worksheet = workbook.getWorksheet(1);
+      var headerRow = worksheet.getRow(1)
+      var addressLineCell;
+      var stateCell;
+      var cityCell;
+      var postalCodeCell;
+      var extraCell;
+   
+
+      headerRow.eachCell(function(cell, colNumber) {
+        if(((cell.value).toLowerCase()).includes("address")){
+          addressLineCell = colNumber
+        }
+
+        if((cell.value).toLowerCase() === "state"){
+          stateCell = colNumber
+        }
+
+        if((cell.value).toLowerCase() === "postal code"){
+          postalCodeCell = colNumber
+        }
+        
+        if(((cell.value).toLowerCase()).includes("extra")){
+          extraCell = colNumber
+        }
+
+        if(((cell.value).toLowerCase()).includes("city")){
+          cityCell = colNumber
+        }
+
+      });
+      
+      // console.log('Barcode Cell is:  ' + barcodeCell + ' ||  Customer Cell is:  ' + customerCell);
+
+      let i = 2;
+      let addressCount = 0;
+      totalRows = worksheet.rowCount;
+      reportSummary.totalRead = totalRows;
+
+
+    if(addressLineCell && postalCodeCell && extraCell){
+      worksheet.eachRow(async function (row, rowNumber) {
+        if(rowNumber != 1){
+          let tracking = row.getCell(extraCell) + "";
+          let trackingPrefix = tracking.substring(0,7);
+          let brandName;
+          if(tracking.startsWith("KD")){
+            brandName = `GoFo-${tracking}`;
+          }else{
+            let brand =  await allBrands.filter( (foundBrand) => { return (foundBrand.trackingPrefixes.includes(trackingPrefix)) });
+            brandName = (brand === undefined || brand.length == 0) ? "## Unregistered Brand ##" : brand[0]._id 
+          }
+          let addressLine = row.getCell(addressLineCell) + "";
+          let state = row.getCell(stateCell) + "";
+          let postal = row.getCell(postalCodeCell) + "";
+          let city = row.getCell(cityCell) + "";
+
+          // let searchResult = brands.filter(function(b) { return b.brandName === brandName; });
+          // let searchResult = allBrands.find(e => e._id === brandName);
+          // console.log(brandName +" -- "+ trackingPrefix);
+          
+          arrayOfAddress.push({
+            Brand: brandName,
+            Name: addressLine.trim() ? addressLine : "N/A",
+            Street: addressLine.trim(),
+            City: tracking.startsWith("KD") ? "" : city.trim(),
+            State: state.trim(),
+            Postal: postal.trim(),
+            Country: "US",
+            'Color (0-1)': "",
+            Phone: "",
+            Note: brandName,
+            Latitude: "",
+            Longitude: "",
+            'Service Time': "",
+          })
+        }
+      });
+      if (arrayOfAddress.length > 1) {
+          resolve({addresses: arrayOfAddress, errors:errors,  totalRecords:(i-1)});
+        } else {  
+          reject("Error Getting Data In Excell Extraction");
+        }
+    }else{
+      reject("Unable to determine Customer Columm or Barcode Columm");
+    }
+
+    })  
+
+  });
+}
+
 
 function getDataForPrint(filePath, options) {
   return new Promise(function (resolve, reject) {
@@ -1122,6 +1236,7 @@ function populateExcelData(fileName, addresses) {
           row.getCell(2).value = address.Street;
           row.getCell(3).value = address.City;
           row.getCell(4).value = state;
+          row.getCell(5).value = address.Postal;
           row.getCell(6).value = country;
           row.getCell(9).value = address.Brand;
           row.commit();
@@ -1171,7 +1286,7 @@ async function populateExcelDataRoute4Me(fileName, addresses) {
             country = (country.length > 3) ? country.split(" ")[0][0] + country.split(" ")[1][0] : country;
             let state = address.State.toUpperCase();
             row.getCell(2).value = address.Brand;
-            row.getCell(1).value = address.Street + ", " + address.City + ", " + state + ", " + country;
+            row.getCell(1).value = address.Street + ", " + address.City + ", " + address.Postal +", "+ state + ", " + country;
 
             // row.getCell(3).value = ;
             // row.getCell(4).value = state;
