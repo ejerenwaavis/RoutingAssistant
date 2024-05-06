@@ -104,10 +104,8 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  
-  verified: { status: Boolean, default: false,
-  approvalNotes:[{description:String, adminUsername:String, date:Date}]
-  },
+  verified: { status: Boolean, default: false },
+  approvalNotes:[{description:String, adminUsername:String, date:Date}],
   isProUser: { type: Boolean, default: false },
   renews: { type: Date, default: new Date() },
   usageCount: { type: Number, default: 0 },
