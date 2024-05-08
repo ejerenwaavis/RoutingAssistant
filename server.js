@@ -104,14 +104,16 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  verified: { status: Boolean, default: false },
+  verified: { type: Boolean, default: false },
+  email: { type: String, default: "" },
   approvalNotes:[{description:String, adminUsername:String, date:Date}],
   isProUser: { type: Boolean, default: false },
+  isSuperAdmin: { type: Boolean, default: false },
   renews: { type: Date, default: new Date() },
   usageCount: { type: Number, default: 0 },
 });
 userSchema.plugin(passportLocalMongoose);
-const User = mongoose.model("testUser", userSchema);
+const User = mongoose.model("User", userSchema);
 
 /********* Configure Passport **************/
 passport.use(User.createStrategy());
@@ -596,6 +598,7 @@ app.route(APP_DIRECTORY + "/googleLoggedin")
           return next(err);
         }
         // Redirect if it succeeds
+        console.log(user);
         return res.redirect(APP_DIRECTORY + '/');
       });
     })(req, res, next);
