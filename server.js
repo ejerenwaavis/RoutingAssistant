@@ -14,6 +14,7 @@ const HEREAPI = process.env.HEREAPI;
 const MONGOPASSWORD = process.env.MONGOPASSWORD;
 const MONGOUSER = process.env.MONGOUSER;
 const MONGOURI2 = process.env.MONGOURI2;
+const USERS_DB = process.env.USERS_DB;
 
 
 const SALTROUNDS = 10;
@@ -84,12 +85,31 @@ mongoose.connect(uri, {
 });
 mongoose.set("useCreateIndex", true);
 
+
+/*
 const brandSchema = new mongoose.Schema({
   _id: String,
   trackingPrefixes: [String], //array of variants of the tracking prefixes
 });
 
 const Brand = mongoose.model("Brand", brandSchema);
+var allBrands;
+*/
+
+const usersDB = "mongodb+srv://" + MONGOUSER + ":" + MONGOPASSWORD + USERS_DB;
+const brandsDB = "mongodb+srv://" + MONGOUSER + ":" + MONGOPASSWORD + MONGOURI2;
+
+const brandConn = mongoose.createConnection(brandsDB, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
+
+const brandSchema = new mongoose.Schema({
+  _id: String,
+  trackingPrefixes: [String], //array of variants of the tracking prefixes
+});
+
+const Brand = brandConn.model("Brand", brandSchema);
 var allBrands;
 
 
@@ -113,7 +133,12 @@ const userSchema = new mongoose.Schema({
   usageCount: { type: Number, default: 0 },
 });
 userSchema.plugin(passportLocalMongoose);
-const User = mongoose.model("User", userSchema);
+
+const userConn = mongoose.createConnection(usersDB, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
+const User = userConn.model("User", userSchema);
 
 /********* Configure Passport **************/
 passport.use(User.createStrategy());
@@ -1378,20 +1403,49 @@ function populateExcelDataForPrint(fileName, addresses, userName) {
 }
 
 async function cacheBrands(){
-  allBrands = await Brand.find({},"-__v");
+  try{
+    allBrands = await Brand.find({},"-__v");
+  }catch (error){
+    console.log(outputDate() , " Failed to Load Online Brands");
+  }
+
+
   stringBrands = JSON.stringify(allBrands);
   // reCon = JSON.parse(stringBrands);
   // console.log(reCon);
-  fs.writeFile(tempFilePath + 'brands.txt', stringBrands, err => {
-  if (err) {
-    console.error(err);
-  }
-  
-  // file written successfully
-  console.error("Brands written to file");
-});
-}
+  // console.log(stringBrands);
 
+  fs.mkdir(tempFilePath, (err) => {
+      if (err) {
+        // console.log(err.message);
+        // console.log(err.code);
+        if (err.code === "EEXIST") {
+          if(SERVER)
+          console.error("Directory ALREADY Exists.");
+           fs.writeFile(tempFilePath + 'brands.txt', stringBrands, err => {
+              if (err) {
+                console.error(err);
+              }else{ 
+                console.log(outputDate() + "Brands cached and ready");
+            }
+          }); 
+        } else {
+          console.error(err.code);;
+          console.error(err);;
+        }
+      }else{
+        fs.writeFile(tempFilePath + 'brands.txt', stringBrands, err => {
+          if (err) {
+            console.error(err);
+          }else{
+            console.log("Brands written to file");
+          }
+        }); 
+        console.log("'/tmp' Directory was created.");
+      }
+    });
+ 
+}
 
 async function processBrandUpdates(brands){
   return new Promise((resolve,reject) => {
@@ -1513,22 +1567,28 @@ async function updateBrand(brand) {
         }
       }
     )
-
   });
 }
 
 async function clearTempFolder(){
   fs.readdir(tempFilePath, (err, files) => {
-  if (err) throw err;
-
-  for (const file of files) {
-    if(file.startsWith("R4M") || file.startsWith("RW") || file.startsWith("bra")){
-      fs.unlink(path.join(tempFilePath, file), (err) => {
-        if (err) throw err; 
-      });
+  if (err) {
+    console.error(err.code + "\nFailed to clear temp folder");
+  }else{
+    // console.error(files);
+    for (const file of files) {
+      if(file.startsWith("R4M") || file.startsWith("RW") || file.startsWith("contractorsList") || file.startsWith("brands.txt")){
+        fs.unlink(path.join(tempFilePath, file), (err) => {
+          if (err) throw err; 
+        });
+      }
     }
   }
 });
+}
+
+function outputDate() {
+  return (new Date().toLocaleString()) + " >> ";
 }
 
 function Body(title, error, message) {
