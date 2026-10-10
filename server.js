@@ -21,6 +21,9 @@ const SECRETE = process.env.SECRETE;
 const STRIPEAPI = process.env.STRIPEAPI;
 
 const APP_DIRECTORY = !(SERVER) ? "" : ((process.env.APP_DIRECTORY) ? (process.env.APP_DIRECTORY) : "");
+const BASE_URL = process.env.BASE_URL || (SERVER ? "https://ra.aceddivision.com" : "http://localhost:3025");
+const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || `${BASE_URL}${APP_DIRECTORY}/googleLoggedin`;
+const FACEBOOK_CALLBACK_URL = process.env.FACEBOOK_CALLBACK_URL || `${BASE_URL}${APP_DIRECTORY}/facebookLoggedin`;
 const PUBLIC_FOLDER = (SERVER) ? "./" : "../";
 const PUBLIC_FILES = process.env.PUBLIC_FILES;
 const TEMP_FILEPATH = (process.env.TEMP_FILEPATH ? process.env.TEMP_FILEPATH : 'tmp/');
@@ -155,7 +158,8 @@ passport.use(new LocalStrategy(
 passport.use(new FacebookStrategy({
   clientID: FACEBOOK_APP_ID,
   clientSecret: FACEBOOK_APP_SECRET,
-  callbackURL: (SERVER) ? "https://triumphcourier.com"+ APP_DIRECTORY+ "/facebookLoggedin" : APP_DIRECTORY + "/facebookLoggedin",  enableProof: true,
+  callbackURL: FACEBOOK_CALLBACK_URL,
+  enableProof: true,
   profileFields: ["birthday", "email", "first_name", 'picture.type(large)', "last_name"]
 },
   function (accessToken, refreshToken, profile, cb) {
@@ -199,7 +203,7 @@ passport.use(new FacebookStrategy({
 passport.use(new GoogleStrategy({
   clientID: CLIENT_ID,
   clientSecret: CLIENT_SECRETE,
-  callbackURL: (SERVER) ? "https://triumphcourier.com"+ APP_DIRECTORY+"/googleLoggedin" : APP_DIRECTORY + "/googleLoggedin",
+  callbackURL: GOOGLE_CALLBACK_URL,
   userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
 },
   function (accessToken, refreshToken, profile, cb) {
