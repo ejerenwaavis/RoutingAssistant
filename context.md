@@ -1,4 +1,4 @@
-﻿# RoutingAssistant & OpsBridge Project Context
+# RoutingAssistant & OpsBridge Project Context
 
 ## Overview
 This document tracks project state, requirements, environment configurations, and pending milestones to ensure no steps or constraints are missed.
@@ -33,5 +33,14 @@ This document tracks project state, requirements, environment configurations, an
 - Google OAuth: Dynamic callback URL `https://ra.aceddivision.com/googleLoggedin` with `BASE_URL` fallback.
 - Facebook OAuth: Dynamic callback URL `https://ra.aceddivision.com/facebookLoggedin` with `BASE_URL` fallback.
 
+## Manifest Ingestion & Export Engine
+- **Universal Smart Parser**: Added `src/services/smartParser.js` supporting `.csv`, `.xlsx`, and `.xls` across SpeedX, OnTrac, GoFor Express, Eli, Circuit, RoadWarrior, and generic carrier manifests.
+- **Auto-Schema Detection**: Scans first 10 rows matching headers across 12 semantic fields with fallback content pattern recognition.
+- **Address Deconstruction**: Multi-pattern regex for US addresses, stripping unit/apartment/c-o notes into separate fields, normalizing State, ZIP, and country (`US`).
+- **Export Formats**: Added `src/services/exportService.js` supporting RoadWarrior CSV, Route4Me CSV, Circuit CSV, and legacy Excel (.xlsx).
+- **Web UI & REST APIs**: Web form uploads directly output CSV for download. Added `POST /api/manifest/parse` and `POST /api/manifest/export` for seamless React integration.
+- **Frontend Status**: Zero changes made to existing EJS templates/styles.
+
 ## Next Phase
-- Awaiting user's UI designs and step-by-step feature implementation specifications.
+- Step-by-step UI transition to React and frontend integration with `/api/manifest/parse` and `/api/manifest/export`.
+
