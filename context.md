@@ -77,14 +77,15 @@ Modernize the existing `RoutingAssistant` application with the new SpeedX Ops As
   - [x] Full build output verification in `public_html/`
 
 ### Phase 6: GitHub Push
-- [ ] Commit all changes to `feature/opsbridge-upgrade`
-- [ ] Push branch to remote: `git push -u origin feature/opsbridge-upgrade`
+- [x] Commit all changes to `feature/opsbridge-upgrade`
+- [x] Push branch to remote: `git push -u origin feature/opsbridge-upgrade`
 
 ### Phase 7: Namecheap Deployment (`ra.aceddivision.com`)
-- [ ] SSH to `aceddivision`
-- [ ] Create subdomain `ra.aceddivision.com` via `uapi SubDomain`
-- [ ] Clone / pull branch `feature/opsbridge-upgrade` into `/home/acedzagz/ra.aceddivision.com`
-- [ ] Register Node.js app using `cloudlinux-selector` (Node 20 or 22, root `ra.aceddivision.com`, startup `server.js`)
-- [ ] Install production dependencies on server
-- [ ] Build client on server or deploy pre-built `public_html/`
-- [ ] Restart app and verify live HTTPS access at `https://ra.aceddivision.com`
+- [x] SSH to `aceddivision`
+- [x] Create subdomain `ra.aceddivision.com` via `uapi SubDomain`
+- [x] Clone / pull branch `feature/opsbridge-upgrade` into `/home/acedzagz/ra.aceddivision.com`
+- [x] Register Node.js app using `cloudlinux-selector` (Node 20, root `ra.aceddivision.com`, startup `server.js`)
+- [x] Install production dependencies on server inside nodevenv
+- [x] Deploy pre-built `public_html/` and verified Express static serving
+- [x] Register repository in cPanel VersionControl datastore (`vc_list_store`)
+- [x] Restart app and verify live HTTPS access and `/api/health` at `https://ra.aceddivision.com`
