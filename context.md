@@ -39,7 +39,8 @@ This document tracks project state, requirements, environment configurations, an
 - **Address Deconstruction**: Multi-pattern regex for US addresses, stripping unit/apartment/c-o notes into separate fields, normalizing State, ZIP, and country (`US`).
 - **Export Formats**: Added `src/services/exportService.js` supporting RoadWarrior CSV, Route4Me CSV, Circuit CSV, and legacy Excel (.xlsx).
 - **Web UI & REST APIs**: Web form uploads directly output CSV for download. Added `POST /api/manifest/parse` and `POST /api/manifest/export` for seamless React integration.
-- **Frontend Status**: Zero changes made to existing EJS templates/styles.
+- **Bug Fix**: Fixed EJS render TypeError (`Cannot read properties of null (reading 'length')`) on `excellDownload.ejs` by making `errors` check defensive and passing `[]` instead of `null`. Hardened address regex and added state map dictionary in `smartParser.js`. Safe path resolution added to `deleteFile`.
+- **Frontend Status**: Zero visual/styling changes made to existing EJS templates.
 
 ## Next Phase
 - Step-by-step UI transition to React and frontend integration with `/api/manifest/parse` and `/api/manifest/export`.
