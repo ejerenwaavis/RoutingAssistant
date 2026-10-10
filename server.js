@@ -43,6 +43,14 @@ const fs = require("fs");
 const path = require("path");
 const Excel = require('exceljs');
 const formidable = require('formidable');
+const { parseManifest } = require("./src/services/smartParser");
+const {
+  generateRoadWarriorCsv,
+  generateRoute4MeCsv,
+  generateCircuitCsv,
+  generateRoadWarriorExcel,
+  generateRoute4MeExcel
+} = require("./src/services/exportService");
 const mongoose = require("mongoose");
 const bcrypt = require('bcrypt');
 // const nodemailer = require('nodemailer');
@@ -268,96 +276,157 @@ app.route(APP_DIRECTORY + "/")
 app.route(APP_DIRECTORY + "/fileUpload")
   .post(async function (req, res) {
     if (req.isAuthenticated()) {
-      if(allBrands.length<1){
-        cacheBrands();
+      if (!allBrands || allBrands.length < 1) {
+        await cacheBrands().catch(() => {});
       }
       var form = new formidable.IncomingForm();
-      form.parse(req, function (err, fields, files) {
+      form.parse(req, async function (err, fields, files) {
         let upload = files.elicsv;
-        let loaded = (fields.loaded) ? "Loaded" : false;
-        let attempted = (fields.attempted) ? "Attempted" : false;
-        let delivered = (fields.delivered) ? "Delivered" : false;
-        let extractFor = fields.extractFor;
-        // populateErrors = [];
-
-        let today = new Date;
-
-        if (extractFor != "print") {
-          let fileNamePrefix = (extractFor === "roadWarrior") ? "RW - " : "R4M - ";
-          let tempFileName = (fileNamePrefix + today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " " + req.user._id + '.xlsx').replace(/ /g, "_");
-          getData(upload.path, { loaded: loaded, attempted: attempted, delivered: delivered, extractFor: extractFor }).then(function (processedData) {            
-            let addresses = processedData.addresses;
-            let errors = processedData.errors;
-            let read = addresses.length;
-            console.log("actual read: " + read);
-            console.log("Records read: " + addresses.length);
-            // var populateResult;
-            if (extractFor === "roadWarrior") {
-              console.log("running for ROAD WARIOR");
-              populateExcelData(tempFileName, addresses).then((x) =>{
-                res.render("excellDownload.ejs", {
-                  //uncomment fir local developement
-                  // filePath: tempFilePath  + tempFileName,
-                  // remote hosting version
-                  filePath: (SERVER? APP_DIRECTORY + "/": tempFilePath)  + tempFileName,
-                  body: new Body("Download", "", ""),
-                  errors: (errors) ? errors: null,
-                  user: req.user,
-                });
-              });
-            } else {
-              console.log("running for ROUTE 4 ME");
-              // console.log("From after processed Data");
-              populateExcelDataRoute4Me(tempFileName, addresses).then((x)=>{
-                // console.log("Inside Promise prinintg");
-                // console.log(x);
-                res.render("excellDownload.ejs", {
-                  //uncomment fir local developement
-                  // filePath: tempFilePath  + tempFileName,
-                  // remote hosting version
-                  filePath: (SERVER? APP_DIRECTORY + "/": tempFilePath)  + tempFileName,
-                  body: new Body("Download", "", ""),
-                  errors: (errors) ? errors: null,
-                  user: req.user,
-                });
-              });
-
-            }
-          }).catch(err => {
-            console.log("Error Getting Data");
-            res.render("home.ejs", {
-            //uncomment fir local developement
-            // filePath: tempFilePath  + tempFileName,
-            // remote hosting version
+        if (!upload || !upload.path) {
+          return res.render("home.ejs", {
             filePath: "",
-            body: new Body("Download", "Error Getting Data: Try again and make sure you are uploading a .CSV file not an .XLS or XLSX file", ""),
-            errors: [{name:"", line: "Bad File Format", fullAddress: "Try again and make sure you are uploading a .CSV file not an .XLS or XLSX file"}],
-            user: req.user,
+            body: new Body("Upload", "Please select a manifest file to upload", ""),
+            errors: [{ name: "", line: "No File", fullAddress: "No file was selected for upload" }],
+            user: req.user
           });
-        });
-        } else {
-          let tempFileName = (today.toDateString() + '_' + today.getHours() + '-' + today.getMinutes() + " -PRINT- " + req.user._id + '.xlsx').replace(/ /g, "_");
-          // console.log("extract for print");
-          getDataForPrint(upload.path, { loaded: loaded, attempted: attempted, extractFor: extractFor }).then(function (addresses) {
-            let userName = req.user.firstName + " " + req.user.lastName;
-            console.log("Records read: " + addresses.length);
-            // console.log(addresses);
-            // console.log(userName);
-            populateExcelDataForPrint(tempFileName, addresses, userName);
-            res.render("stopDisplay.ejs", {
-              filePath:  tempFilePath + tempFileName,
-              body: new Body("Pick First Stop", "", ""),
-              addresses: addresses,
-              user: req.user,
-            });
-          })
         }
 
+        let loaded = Boolean(fields.loaded);
+        let attempted = Boolean(fields.attempted);
+        let delivered = Boolean(fields.delivered);
+        let extractFor = fields.extractFor || "roadWarrior";
+
+        let today = new Date();
+        let datePrefix = today.toISOString().slice(0, 10) + "_" + today.getHours() + "-" + today.getMinutes();
+        let userSlug = (req.user && req.user._id ? String(req.user._id).replace(/[^a-zA-Z0-9]/g, "_") : "driver");
+
+        try {
+          const processedData = await parseManifest(upload.path, {
+            loaded: loaded,
+            attempted: attempted,
+            delivered: delivered,
+            extractFor: extractFor
+          }, allBrands);
+
+          let addresses = processedData.addresses;
+          let errors = processedData.errors;
+
+          if (!fs.existsSync(tempFilePath)) {
+            fs.mkdirSync(tempFilePath, { recursive: true });
+          }
+
+          if (extractFor !== "print") {
+            let fileNamePrefix = (extractFor === "roadWarrior") ? "RW - " : "R4M - ";
+            let baseName = (fileNamePrefix + datePrefix + "_" + userSlug).replace(/[^a-zA-Z0-9_-]/g, "_");
+            let csvFileName = baseName + ".csv";
+            let excelFileName = baseName + ".xlsx";
+
+            if (extractFor === "roadWarrior") {
+              const csvContent = generateRoadWarriorCsv(addresses);
+              fs.writeFileSync(tempFilePath + csvFileName, csvContent, "utf8");
+              await generateRoadWarriorExcel(addresses, "original/legacy.xlsx", tempFilePath + excelFileName).catch(e => console.error("Excel generation error:", e.message));
+            } else {
+              const csvContent = generateRoute4MeCsv(addresses);
+              fs.writeFileSync(tempFilePath + csvFileName, csvContent, "utf8");
+              await generateRoute4MeExcel(addresses, "original/r4me-original.xlsx", tempFilePath + excelFileName).catch(e => console.error("Excel generation error:", e.message));
+            }
+
+            // Expose the CSV file for immediate download
+            let downloadPath = (SERVER ? (APP_DIRECTORY ? APP_DIRECTORY + "/" : "/") : tempFilePath) + csvFileName;
+
+            res.render("excellDownload.ejs", {
+              filePath: downloadPath,
+              body: new Body("Download", "", ""),
+              errors: errors && errors.length ? errors : null,
+              user: req.user
+            });
+          } else {
+            let tempFileName = ("PRINT_" + datePrefix + "_" + userSlug + ".xlsx").replace(/[^a-zA-Z0-9_-]/g, "_");
+            let userName = (req.user ? (req.user.firstName + " " + req.user.lastName) : "Driver");
+            populateExcelDataForPrint(tempFileName, addresses, userName);
+            res.render("stopDisplay.ejs", {
+              filePath: tempFilePath + tempFileName,
+              body: new Body("Pick First Stop", "", ""),
+              addresses: addresses,
+              user: req.user
+            });
+          }
+        } catch (err) {
+          console.error("Error Processing Manifest:", err);
+          res.render("home.ejs", {
+            filePath: "",
+            body: new Body("Download", "Error Processing Manifest: " + (err.message || "Failed to extract valid delivery stops"), ""),
+            errors: [{ name: "", line: "Parsing Error", fullAddress: err.message || "Could not parse columns from uploaded file" }],
+            user: req.user
+          });
+        }
       });
     } else {
       res.redirect(APP_DIRECTORY + "/");
     }
-  })
+  });
+
+/****************** Manifest REST APIs (Ready for React Transition) *******************/
+app.post(APP_DIRECTORY + "/api/manifest/parse", async function (req, res) {
+  try {
+    var form = new formidable.IncomingForm();
+    form.parse(req, async function (err, fields, files) {
+      if (err) return res.status(400).json({ error: "Failed to parse upload" });
+      let upload = files.file || files.manifest || files.elicsv;
+      if (!upload || !upload.path) return res.status(400).json({ error: "No manifest file uploaded" });
+
+      const result = await parseManifest(upload.path, {
+        loaded: fields.loaded !== "false",
+        attempted: fields.attempted === "true",
+        delivered: fields.delivered === "true"
+      }, allBrands);
+
+      res.json({
+        success: true,
+        totalRecords: result.totalRecords,
+        stopsCount: result.addresses.length,
+        errors: result.errors,
+        stops: result.addresses
+      });
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(APP_DIRECTORY + "/api/manifest/export", function (req, res) {
+  try {
+    const { stops, format } = req.body;
+    if (!Array.isArray(stops) || stops.length === 0) {
+      return res.status(400).json({ error: "No stops provided for export" });
+    }
+
+    let csvContent = "";
+    let filename = `manifest_${Date.now()}.csv`;
+
+    switch ((format || "").toLowerCase()) {
+      case "circuit":
+        csvContent = generateCircuitCsv(stops);
+        filename = `circuit_${Date.now()}.csv`;
+        break;
+      case "route4me":
+        csvContent = generateRoute4MeCsv(stops);
+        filename = `route4me_${Date.now()}.csv`;
+        break;
+      case "roadwarrior":
+      default:
+        csvContent = generateRoadWarriorCsv(stops);
+        filename = `roadwarrior_${Date.now()}.csv`;
+        break;
+    }
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csvContent);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.route(APP_DIRECTORY + "/brandsFileUpload")
   .get(function (req, res){
@@ -800,136 +869,9 @@ function copyLegacyTemplate(tempFileName) {
   });
 }
 
-// promise that returns an array of JSON Addresses {customerName, address, apt(if any:ste,apt), city,state, country};
+// Delegate getData to universal smart parser
 async function getData(filePath, options) {
-  return new Promise(function (resolve, reject) {
-    fs.readFile(filePath, 'utf8', function (err, data) {
-      // console.log(options);
-      if (!err) {
-        // console.log(data);
-        let parsedJSON = papa.parse(data);
-        let arrayOfAddress = [];
-        let errors = [];
-        let totalRecords = 0;
-        // console.log("get data says....");
-        // console.log(parsedJSON);
-        for (let i = 1; i < parsedJSON.data.length; i++) {
-          totalRecords++;
-          let jsonAddress = {};
-          jsonAddress.Barcode = parsedJSON.data[i][0];
-          let brand =  allBrands.filter( (foundBrand) => { return (foundBrand.trackingPrefixes.includes(jsonAddress.Barcode.substring(0,7))) })
-          let brandName = (brand === undefined || brand.length == 0)? "## Unregistered Brand ##" : brand[0]._id 
-          // console.log("*****");
-          // console.log(options);
-          // console.log(parsedJSON.data[i][1]);
-          // console.log("*****");
-          if (parsedJSON.data[i][1] === options.loaded || parsedJSON.data[i][1] === options.attempted || parsedJSON.data[i][1] === options.delivered) {
-                tempSplitAddress = (parsedJSON.data[i][3] + "").split(".");
-                let splitAddress;
-                if (tempSplitAddress.includes(" US")) {
-                  splitAddress = tempSplitAddress;
-                } else {
-                  tempSplitAddress.push(" US");
-                  // console.log(tempSplitAddress);
-                  splitAddress = tempSplitAddress;
-                }
-                // console.log(splitAddress.includes(" US"));
-                // console.log(splitAddress);
-                if (options.extractFor === "roadWarrior" || options.extractFor === "route4me") {
-                  if (splitAddress.length > 5) {
-                    let country = (splitAddress[5] + "").trim();
-                    let countryProcessed = "";
-                    let name = ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A";
-                    let street = (splitAddress[1] + "").trim() + ", " + (splitAddress[2] + "").trim();
-                    let city = (splitAddress[3] + "").trim();
-                    try{
-                      if (country != "UNDEFINED") {
-                        // var row = worksheet.getRow(i);
-                        countryProcessed = (country.length > 3) ? country.split(" ")[0][0] + country.split(" ")[1][0] : country;
-                        // let state = address.State.toUpperCase();
-                        // row.getCell(2).value = address.Brand;
-                        // row.getCell(1).value = address.Street + ", " + address.City + ", " + state + ", " + country;
-
-                        // row.getCell(3).value = ;
-                        // row.getCell(4).value = state;
-                        // row.getCell(6).value = country;
-                        // row.commit();
-                        
-                        // console.log(JSON.stringify(address));
-                      }
-                    }catch(error){
-                      // console.log("errors where found at " + (i + 3));
-                      errors.push({name:name, line: (i+1), fullAddress: street + " " +city});
-                      // console.log(populateErrors);
-                    }
-
-                    jsonAddress = {
-                      Brand: brandName,
-                      Name: name,//((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
-                      // apt:(splitAddress[1]+"").trim(),
-                      Street: street,// (splitAddress[1] + "").trim() + ", " + (splitAddress[2] + "").trim(),
-                      City: city, //(splitAddress[3] + "").trim(),
-                      State: (splitAddress[4] + "").trim(),
-                      Postal: "",
-                      Country: countryProcessed,
-                      // Country: (splitAddress[5] + "").trim(),
-                      'Color (0-1)': "",
-                      Phone: "",
-                      Note: "",
-                      Latitude: "",
-                      Longitude: "",
-                      'Service Time': "",
-                    }
-                  } else {
-                    jsonAddress = {
-                      Brand: brandName,
-                      Name: ((splitAddress[0] + "").trim()) ? splitAddress[0] : "N/A",
-                      Street: (splitAddress[1] + "").trim(),
-                      City: (splitAddress[2] + "").trim(),
-                      State: (splitAddress[3] + "").trim(),
-                      Postal: "",
-                      Country: (splitAddress[4] + "").trim(),
-                      'Color (0-1)': "",
-                      Phone: "",
-                      Note: "",
-                      Latitude: "",
-                      Longitude: "",
-                      'Service Time': "",
-
-                    }
-                  }
-                }
-                // console.log(jsonAddress);
-                // if (jsonAddress.Name != "undefined" && jsonAddress.Name != " Unknown name") {
-                  arrayOfAddress.push(jsonAddress);
-                // }
-
-                // console.log("Objects " + parsedJSON.data.length);
-                
-              // }
-            
-              
-            // });  // end if brand finding
-          } else {
-            // console.log("already attempted/delivered");
-          }
-          
-        } //end of for loop
-        if (arrayOfAddress.length > 1) {
-          // console.log("Data Processing Done . . . ");
-          // console.log(arrayOfAddress);
-          resolve({addresses: arrayOfAddress, errors: errors, totalRecords:totalRecords});
-        } else {
-          // console.log("Error getting data");  
-          reject("Error Getting Data");
-        }
-        
-        // }
-      } else {
-        console.log("something happened");
-      }
-    });
-  });
+  return parseManifest(filePath, options, allBrands);
 }
 
 
