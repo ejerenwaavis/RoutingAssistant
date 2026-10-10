@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { Download, FileDown, Check, Sparkles, Navigation, Map, Route } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Download, FileDown, Check, Sparkles, Navigation, Map, Route, FileCheck } from 'lucide-react';
 import { exportManifest } from '../lib/exporter';
+import { buildExportFilename } from '../lib/filenameHelper';
 import type { Stop, ExportPreset } from '../types';
 
 interface Step3ExportProps {
   filteredStops: Stop[];
+  selectedZips: string[];
+  totalZipsCount?: number;
 }
 
 interface FormatOption {
@@ -46,10 +49,20 @@ const FORMAT_OPTIONS: FormatOption[] = [
   }
 ];
 
-export const Step3Export: React.FC<Step3ExportProps> = ({ filteredStops }) => {
+export const Step3Export: React.FC<Step3ExportProps> = ({
+  filteredStops,
+  selectedZips,
+  totalZipsCount
+}) => {
   const [selectedFormat, setSelectedFormat] = useState<ExportPreset>('circuit');
   const [isExporting, setIsExporting] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [lastExportedFilename, setLastExportedFilename] = useState<string | null>(null);
+
+  // Live estimated filename preview based on selected ZIPs and current clock
+  const livePreviewFilename = useMemo(() => {
+    return buildExportFilename(selectedZips, totalZipsCount, new Date());
+  }, [selectedZips, totalZipsCount]);
 
   const handleExport = () => {
     if (filteredStops.length === 0) return;
@@ -57,9 +70,16 @@ export const Step3Export: React.FC<Step3ExportProps> = ({ filteredStops }) => {
     setDownloadSuccess(false);
 
     try {
-      exportManifest(selectedFormat, filteredStops);
+      // Name the exported file using selected zip code(s) plus current date & time
+      const exportedFilename = exportManifest(
+        selectedFormat,
+        filteredStops,
+        selectedZips,
+        totalZipsCount
+      );
+      setLastExportedFilename(exportedFilename);
       setDownloadSuccess(true);
-      setTimeout(() => setDownloadSuccess(false), 3000);
+      setTimeout(() => setDownloadSuccess(false), 5000);
     } catch (err) {
       console.error('Export error:', err);
     } finally {
@@ -125,6 +145,19 @@ export const Step3Export: React.FC<Step3ExportProps> = ({ filteredStops }) => {
         })}
       </div>
 
+      {/* Export Filename Preview */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 px-1 text-xs text-zinc-400">
+        <div className="flex flex-wrap items-center gap-1.5 font-mono">
+          <span className="text-zinc-500 font-sans">Export Filename:</span>
+          <span className="text-emerald-400 bg-zinc-950 px-2.5 py-0.5 rounded-lg border border-zinc-800 break-all">
+            {livePreviewFilename}
+          </span>
+        </div>
+        <span className="text-[11px] text-zinc-500">
+          Selected ZIP(s) + export click timestamp
+        </span>
+      </div>
+
       {/* One Large Export Button */}
       <div className="flex flex-col sm:flex-row items-center gap-3">
         <button
@@ -140,10 +173,12 @@ export const Step3Export: React.FC<Step3ExportProps> = ({ filteredStops }) => {
         </button>
 
         {downloadSuccess && (
-          <span className="text-xs font-medium text-emerald-400 flex items-center gap-1.5 animate-fade-in">
-            <Check className="h-4 w-4" />
-            File downloaded successfully!
-          </span>
+          <div className="text-xs font-medium text-emerald-400 flex items-center gap-1.5 animate-fade-in bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl">
+            <Check className="h-4 w-4 shrink-0" />
+            <span>
+              Saved: <strong className="font-mono text-zinc-200">{lastExportedFilename}</strong>
+            </span>
+          </div>
         )}
       </div>
     </div>

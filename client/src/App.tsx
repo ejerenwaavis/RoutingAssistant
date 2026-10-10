@@ -4,13 +4,15 @@ import { Step1Ingest } from './components/Step1Ingest';
 import { Step2ZipSlicer } from './components/Step2ZipSlicer';
 import { Step3Export } from './components/Step3Export';
 import { StopsTable } from './components/StopsTable';
-import type { Stop, UserProfile } from './types';
+import { extractTimestampFromFilename } from './lib/filenameHelper';
+import type { Stop, UserProfile, ManifestMetadata } from './types';
 
 export function App() {
   const [stops, setStops] = useState<Stop[]>([]);
   const [selectedZips, setSelectedZips] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [sourceName, setSourceName] = useState<string>('');
+  const [manifestMeta, setManifestMeta] = useState<ManifestMetadata | null>(null);
   const [user, setUser] = useState<UserProfile | undefined>(undefined);
 
   // Fetch current user from server session on mount
@@ -26,6 +28,11 @@ export function App() {
   const handleStopsLoaded = (loadedStops: Stop[], source: string) => {
     setStops(loadedStops);
     setSourceName(source);
+
+    // Extract SpeedX 13-digit timestamp if present in the filename
+    const meta = extractTimestampFromFilename(source);
+    setManifestMeta(meta);
+
     // By default, select all detected zips
     const allZips = new Set(loadedStops.map(s => s.zip || 'Unknown'));
     setSelectedZips(allZips);
@@ -56,7 +63,13 @@ export function App() {
     setStops([]);
     setSelectedZips(new Set());
     setSourceName('');
+    setManifestMeta(null);
   };
+
+  // Total unique ZIP codes detected across all stops
+  const allUniqueZipsCount = useMemo(() => {
+    return new Set(stops.map(s => s.zip || 'Unknown')).size;
+  }, [stops]);
 
   // Filter stops based on selected ZIPs
   const filteredStops = useMemo(() => {
@@ -71,6 +84,7 @@ export function App() {
         filteredCount={filteredStops.length}
         onReset={handleReset}
         user={user}
+        manifestMeta={manifestMeta}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 flex flex-col gap-5">
@@ -80,6 +94,7 @@ export function App() {
           isLoading={isLoading}
           setIsLoading={setIsLoading}
           hasData={stops.length > 0}
+          manifestMeta={manifestMeta}
         />
 
         {/* Steps 2, 3 and Preview appear immediately after ingestion */}
@@ -92,11 +107,14 @@ export function App() {
               onToggleZip={handleToggleZip}
               onSelectAll={handleSelectAll}
               onDeselectAll={handleDeselectAll}
+              manifestMeta={manifestMeta}
             />
 
             {/* Step 3: One-Click Export */}
             <Step3Export
               filteredStops={filteredStops}
+              selectedZips={Array.from(selectedZips)}
+              totalZipsCount={allUniqueZipsCount}
             />
 
             {/* Compact Preview Table */}

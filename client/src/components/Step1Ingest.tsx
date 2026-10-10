@@ -1,20 +1,22 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, ClipboardPaste, FileSpreadsheet, Loader2, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UploadCloud, ClipboardPaste, FileSpreadsheet, Loader2, Sparkles, CheckCircle2, AlertCircle, Clock, RefreshCw } from 'lucide-react';
 import { parseFile, parseClipboard } from '../lib/parser';
-import type { Stop } from '../types';
+import type { Stop, ManifestMetadata } from '../types';
 
 interface Step1IngestProps {
   onStopsLoaded: (stops: Stop[], sourceName: string) => void;
   isLoading: boolean;
   setIsLoading: (val: boolean) => void;
   hasData: boolean;
+  manifestMeta?: ManifestMetadata | null;
 }
 
 export const Step1Ingest: React.FC<Step1IngestProps> = ({
   onStopsLoaded,
   isLoading,
   setIsLoading,
-  hasData
+  hasData,
+  manifestMeta
 }) => {
   const [tab, setTab] = useState<'upload' | 'paste'>('upload');
   const [pastedText, setPastedText] = useState('');
@@ -117,6 +119,44 @@ export const Step1Ingest: React.FC<Step1IngestProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Active Loaded Manifest Display */}
+      {hasData && manifestMeta && manifestMeta.rawFilename && (
+        <div className="mb-4 p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+              <FileSpreadsheet className="h-4.5 w-4.5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-zinc-100 font-mono break-all" title={manifestMeta.rawFilename}>
+                  {manifestMeta.rawFilename}
+                </span>
+                {manifestMeta.formattedDate ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-medium shrink-0">
+                    <Clock className="h-3 w-3 text-emerald-400" />
+                    <span>Exported: {manifestMeta.formattedDate}</span>
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-[11px] text-zinc-400 mt-0.5">
+                {manifestMeta.formattedDate
+                  ? 'SpeedX batch export timestamp detected and converted to local time'
+                  : 'Active manifest loaded and ready for partitioning'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer self-start sm:self-auto"
+          >
+            <RefreshCw className="h-3 w-3" />
+            <span>Replace File</span>
+          </button>
+        </div>
+      )}
 
       {errorMsg && (
         <div className="mb-4 flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl text-xs">

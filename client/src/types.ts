@@ -22,3 +22,10 @@ export interface UserProfile {
   lastName?: string;
   isProUser?: boolean;
 }
+
+export interface ManifestMetadata {
+  rawFilename: string;
+  timestamp: number | null;
+  formattedDate: string | null;
+  sourceType: 'file' | 'clipboard';
+}

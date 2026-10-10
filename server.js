@@ -324,13 +324,32 @@ app.route(APP_DIRECTORY + "/fileUpload")
           });
         }
 
+        let rawFilename = upload.name || "";
+        let timestampMatch = rawFilename.match(/(?:^|\D)(\d{13})(?:\D|$)/);
+        let uploadFormattedDate = null;
+        if (timestampMatch) {
+          let ms = parseInt(timestampMatch[1], 10);
+          let d = new Date(ms);
+          if (!isNaN(d.getTime())) {
+            uploadFormattedDate = d.toLocaleString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            });
+          }
+        }
+
         let loaded = Boolean(fields.loaded);
         let attempted = Boolean(fields.attempted);
         let delivered = Boolean(fields.delivered);
         let extractFor = fields.extractFor || "roadWarrior";
 
         let today = new Date();
-        let datePrefix = today.toISOString().slice(0, 10) + "_" + today.getHours() + "-" + today.getMinutes();
+        let pad = (n) => String(n).padStart(2, '0');
+        let timeStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}_${pad(today.getHours())}-${pad(today.getMinutes())}`;
         let userSlug = (req.user && req.user._id ? String(req.user._id).replace(/[^a-zA-Z0-9]/g, "_") : "driver");
 
         try {
@@ -349,8 +368,14 @@ app.route(APP_DIRECTORY + "/fileUpload")
           }
 
           if (extractFor !== "print") {
-            let fileNamePrefix = (extractFor === "roadWarrior") ? "RW - " : "R4M - ";
-            let baseName = (fileNamePrefix + datePrefix + "_" + userSlug).replace(/[^a-zA-Z0-9_-]/g, "_");
+            const uniqueZips = Array.from(new Set(addresses.map(s => s.Postal || s.zipCode).filter(Boolean)));
+            const cleanZips = uniqueZips.map(z => String(z).trim().replace(/[^a-zA-Z0-9]/g, '')).filter(z => z && z.toLowerCase() !== 'unknown').sort();
+            let zipPart = 'all';
+            if (cleanZips.length === 1) zipPart = cleanZips[0];
+            else if (cleanZips.length > 1 && cleanZips.length <= 3) zipPart = cleanZips.join('_');
+            else if (cleanZips.length > 3) zipPart = `${cleanZips.slice(0, 3).join('_')}_etc`;
+
+            let baseName = `manifest_${zipPart}_${timeStr}`;
             let csvFileName = baseName + ".csv";
             let excelFileName = baseName + ".xlsx";
 
@@ -371,7 +396,9 @@ app.route(APP_DIRECTORY + "/fileUpload")
               filePath: downloadPath,
               body: new Body("Download", "", ""),
               errors: Array.isArray(errors) ? errors : [],
-              user: req.user
+              user: req.user,
+              rawFilename: rawFilename,
+              uploadFormattedDate: uploadFormattedDate
             });
           } else {
             let tempFileName = ("PRINT_" + datePrefix + "_" + userSlug + ".xlsx").replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -439,24 +466,30 @@ app.post(APP_DIRECTORY + "/api/manifest/export", function (req, res) {
       return res.status(400).json({ error: "No stops provided for export" });
     }
 
-    let csvContent = "";
-    let filename = `manifest_${Date.now()}.csv`;
-
     switch ((format || "").toLowerCase()) {
       case "circuit":
         csvContent = generateCircuitCsv(stops);
-        filename = `circuit_${Date.now()}.csv`;
         break;
       case "route4me":
         csvContent = generateRoute4MeCsv(stops);
-        filename = `route4me_${Date.now()}.csv`;
         break;
       case "roadwarrior":
       default:
         csvContent = generateRoadWarriorCsv(stops);
-        filename = `roadwarrior_${Date.now()}.csv`;
         break;
     }
+
+    const uniqueZips = Array.from(new Set(stops.map(s => s.zip || s.Postal || s.zipCode).filter(Boolean)));
+    const cleanZips = uniqueZips.map(z => String(z).trim().replace(/[^a-zA-Z0-9]/g, '')).filter(z => z && z.toLowerCase() !== 'unknown').sort();
+    let zipPart = 'all';
+    if (cleanZips.length === 1) zipPart = cleanZips[0];
+    else if (cleanZips.length > 1 && cleanZips.length <= 3) zipPart = cleanZips.join('_');
+    else if (cleanZips.length > 3) zipPart = `${cleanZips.slice(0, 3).join('_')}_etc`;
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
+    const filename = `manifest_${zipPart}_${timeStr}.csv`;
 
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);

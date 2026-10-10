@@ -1,14 +1,16 @@
 import React from 'react';
-import { MapPin, RotateCcw, LogOut, CheckCircle, Package } from 'lucide-react';
+import { MapPin, RotateCcw, LogOut, CheckCircle, Package, FileSpreadsheet, Clock } from 'lucide-react';
+import type { ManifestMetadata } from '../types';
 
 interface HeaderProps {
   totalCount: number;
   filteredCount: number;
   onReset: () => void;
   user?: { firstName?: string; username?: string };
+  manifestMeta?: ManifestMetadata | null;
 }
 
-export const Header: React.FC<HeaderProps> = ({ totalCount, filteredCount, onReset, user }) => {
+export const Header: React.FC<HeaderProps> = ({ totalCount, filteredCount, onReset, user, manifestMeta }) => {
   return (
     <header className="border-b border-zinc-800 bg-zinc-900/90 backdrop-blur sticky top-0 z-30 px-4 lg:px-8 py-3.5">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
@@ -30,6 +32,21 @@ export const Header: React.FC<HeaderProps> = ({ totalCount, filteredCount, onRes
 
         {/* Status Counters & Actions */}
         <div className="flex items-center gap-3">
+          {manifestMeta && manifestMeta.rawFilename && (
+            <div className="hidden lg:flex items-center gap-2 bg-zinc-800/80 border border-zinc-700/60 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300">
+              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <span className="font-mono text-zinc-200 max-w-[160px] truncate" title={manifestMeta.rawFilename}>
+                {manifestMeta.rawFilename}
+              </span>
+              {manifestMeta.formattedDate ? (
+                <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold border-l border-zinc-700 pl-2">
+                  <Clock className="h-3 w-3" />
+                  <span>{manifestMeta.formattedDate}</span>
+                </span>
+              ) : null}
+            </div>
+          )}
+
           {totalCount > 0 && (
             <div className="hidden sm:flex items-center gap-2 bg-zinc-800/80 border border-zinc-700/60 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300">
               <Package className="h-3.5 w-3.5 text-zinc-400" />

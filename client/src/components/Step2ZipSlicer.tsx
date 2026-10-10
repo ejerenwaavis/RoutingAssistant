@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { Filter, CheckSquare, Square, Layers, Check } from 'lucide-react';
-import type { Stop } from '../types';
+import { Filter, CheckSquare, Square, Layers, Check, Clock } from 'lucide-react';
+import type { Stop, ManifestMetadata } from '../types';
 
 interface Step2ZipSlicerProps {
   stops: Stop[];
@@ -8,6 +8,7 @@ interface Step2ZipSlicerProps {
   onToggleZip: (zip: string) => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
+  manifestMeta?: ManifestMetadata | null;
 }
 
 export const Step2ZipSlicer: React.FC<Step2ZipSlicerProps> = ({
@@ -15,7 +16,8 @@ export const Step2ZipSlicer: React.FC<Step2ZipSlicerProps> = ({
   selectedZips,
   onToggleZip,
   onSelectAll,
-  onDeselectAll
+  onDeselectAll,
+  manifestMeta
 }) => {
   // Aggregate stops by zip code
   const zipStats = useMemo(() => {
@@ -43,6 +45,12 @@ export const Step2ZipSlicer: React.FC<Step2ZipSlicerProps> = ({
           </div>
           <p className="text-xs text-zinc-400 mt-0.5">
             Select or isolate specific delivery clusters to partition manifests.
+            {manifestMeta?.formattedDate && (
+              <span className="ml-2 text-emerald-400 font-medium inline-flex items-center gap-1">
+                <Clock className="h-3 w-3 inline" />
+                SpeedX Batch: {manifestMeta.formattedDate}
+              </span>
+            )}
           </p>
         </div>
 

@@ -117,31 +117,41 @@ export function generateGroundCloudCsv(stops: Stop[]): string {
   return [headers.join(','), ...rows.map(r => r.map(escapeCsv).join(','))].join('\r\n');
 }
 
-export function exportManifest(preset: ExportPreset, stops: Stop[]): void {
+import { buildExportFilename } from './filenameHelper';
+
+export function exportManifest(
+  preset: ExportPreset,
+  stops: Stop[],
+  selectedZips?: string[],
+  totalZipsCount?: number
+): string {
   let content = '';
-  let filename = '';
-  const timestamp = new Date().toISOString().slice(0, 10);
 
   switch (preset) {
     case 'circuit':
       content = generateCircuitCsv(stops);
-      filename = `Circuit_Spoke_${timestamp}.csv`;
       break;
     case 'roadwarrior':
       content = generateRoadWarriorCsv(stops);
-      filename = `RoadWarrior_${timestamp}.csv`;
       break;
     case 'route4me':
       content = generateRoute4MeCsv(stops);
-      filename = `Route4Me_${timestamp}.csv`;
       break;
     case 'groundcloud':
       content = generateGroundCloudCsv(stops);
-      filename = `GroundCloud_${timestamp}.csv`;
       break;
   }
 
+  // Determine ZIP codes from passed selectedZips or from filtered stops
+  const zipsToUse = selectedZips && selectedZips.length > 0
+    ? selectedZips
+    : Array.from(new Set(stops.map(s => s.zip).filter(Boolean)));
+
+  // Always use the current date and time when the export button is clicked
+  const filename = buildExportFilename(zipsToUse, totalZipsCount, new Date());
+
   downloadCsv(filename, content);
+  return filename;
 }
 
 export function downloadCsv(filename: string, content: string): void {
