@@ -53,36 +53,58 @@ const FacebookStrategy = require('passport-facebook').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
 
-// Configure app to user EJS abd bodyParser
+const cors = require("cors");
+
+// Configure app to user EJS and bodyParser
 app.set("view engine", "ejs");
+app.use(cors());
 app.use(bodyParser.urlencoded({
-  extended: true
+  extended: true,
+  limit: '50mb'
 }));
 app.use(express.static("public"));
 app.use(express.static(tempFilePath));
 app.use(express.static("."));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+
+// Serve React production build from public_html if it exists
+const publicHtmlPath = path.join(__dirname, 'public_html');
+if (fs.existsSync(publicHtmlPath)) {
+  app.use(express.static(publicHtmlPath));
+}
+
+// Mount SpeedX OpsBridge REST API
+const apiRoutes = require('./src/routes/api.routes');
+app.use('/api', apiRoutes);
 
 
 /******************** Authentication Setup & Config *************/
 //Authentication & Session Management Config
 app.use(session({
-  secret: SECRETE,
+  secret: SECRETE || 'routing-assistant-secret-key-2026',
   resave: false,
   saveUninitialized: false,
-
 }));
 app.use(passport.initialize());
 app.use(passport.session());
 
 // Mongoose Configuration and Setup
-const uri = "mongodb+srv://" + MONGOUSER + ":" + MONGOPASSWORD + MONGOURI2;
-// console.log(uri);
-mongoose.connect(uri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
-mongoose.set("useCreateIndex", true);
+if (MONGOUSER && MONGOPASSWORD && MONGOURI2) {
+  const uri = "mongodb+srv://" + MONGOUSER + ":" + MONGOPASSWORD + MONGOURI2;
+  mongoose.connect(uri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  }).then(() => {
+    console.log("Connected to MongoDB");
+  }).catch((err) => {
+    console.error("MongoDB connection warning:", err.message);
+  });
+  if (mongoose.set) {
+    try { mongoose.set("useCreateIndex", true); } catch (e) {}
+  }
+} else {
+  console.log("MongoDB credentials not configured. Running in stateless mode.");
+}
 
 const brandSchema = new mongoose.Schema({
   _id: String,
@@ -152,95 +174,95 @@ passport.use(new LocalStrategy(
 
 
 //telling passport to use Facebook Strategy
-passport.use(new FacebookStrategy({
-  clientID: FACEBOOK_APP_ID,
-  clientSecret: FACEBOOK_APP_SECRET,
-  callbackURL: (SERVER) ? "https://triumphcourier.com"+ APP_DIRECTORY+ "/facebookLoggedin" : APP_DIRECTORY + "/facebookLoggedin",  enableProof: true,
-  profileFields: ["birthday", "email", "first_name", 'picture.type(large)', "last_name"]
-},
-  function (accessToken, refreshToken, profile, cb) {
-    let userProfile = profile._json;
-    // console.log("************ FB Profile *******");
-    // console.log(userProfile.picture.data.url);
-    User.findOne({ _id: userProfile.email }, function (err, user) {
-      if (!err) {
-        if (user) {
-          console.log("Logged in as ----> " + user._id);
-          return cb(err, user);
-        } else {
-          let newUser = new User({
-            _id: userProfile.email,
-            username: userProfile.email,
-            firstName: userProfile.first_name,
-            lastName: userProfile.last_name,
-            photoURL: userProfile.picture.data.url,
-          });
-
-          newUser.save()
-            .then(function () {
-              return cb(null, user);
-            })
-            .catch(function (err) {
-              console.log("failed to create user");
-              console.log(err);
-              return cb(new Error(err));
+if (FACEBOOK_APP_ID && FACEBOOK_APP_SECRET) {
+  passport.use(new FacebookStrategy({
+    clientID: FACEBOOK_APP_ID,
+    clientSecret: FACEBOOK_APP_SECRET,
+    callbackURL: (SERVER) ? "https://triumphcourier.com"+ APP_DIRECTORY+ "/facebookLoggedin" : APP_DIRECTORY + "/facebookLoggedin",  enableProof: true,
+    profileFields: ["birthday", "email", "first_name", 'picture.type(large)', "last_name"]
+  },
+    function (accessToken, refreshToken, profile, cb) {
+      let userProfile = profile._json;
+      User.findOne({ _id: userProfile.email }, function (err, user) {
+        if (!err) {
+          if (user) {
+            console.log("Logged in as ----> " + user._id);
+            return cb(err, user);
+          } else {
+            let newUser = new User({
+              _id: userProfile.email,
+              username: userProfile.email,
+              firstName: userProfile.first_name,
+              lastName: userProfile.last_name,
+              photoURL: userProfile.picture.data.url,
             });
+
+            newUser.save()
+              .then(function () {
+                return cb(null, user);
+              })
+              .catch(function (err) {
+                console.log("failed to create user");
+                console.log(err);
+                return cb(new Error(err));
+              });
+          }
+        } else {
+          console.log("***********Internal error*************");
+          console.log(err);
+          return cb(new Error(err));
         }
-      } else {
-        console.log("***********Internal error*************");
-        console.log(err);
-        return cb(new Error(err));
-      }
-    });
-  }
-));
+      });
+    }
+  ));
+}
 
 //telling passport to use GoogleStrategy
-passport.use(new GoogleStrategy({
-  clientID: CLIENT_ID,
-  clientSecret: CLIENT_SECRETE,
-  callbackURL: (SERVER) ? "https://triumphcourier.com"+ APP_DIRECTORY+"/googleLoggedin" : APP_DIRECTORY + "/googleLoggedin",
-  userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
-},
-  function (accessToken, refreshToken, profile, cb) {
-    let userProfile = profile._json;
-    // console.log(userProfile);
-    User.findOne({
-      _id: userProfile.email
-    }, function (err, user) {
-      if (!err) {
-        // console.log("logged in");
-        if (user) {
-          console.log("Logged in as ----> " + user._id);
-          return cb(null, user)
-        } else {
-          console.log("user not found - creating new user");
-          let newUser = new User({
-            _id: userProfile.email,
-            username: userProfile.email,
-            firstName: userProfile.given_name,
-            lastName: userProfile.family_name,
-            photoURL: userProfile.picture
-          });
-
-          newUser.save()
-            .then(function () {
-              return cb(null, user);
-            })
-            .catch(function (err) {
-              console.log("failed to create user");
-              console.log(err);
-              return cb(new Error(err));
+if (CLIENT_ID && CLIENT_SECRETE) {
+  passport.use(new GoogleStrategy({
+    clientID: CLIENT_ID,
+    clientSecret: CLIENT_SECRETE,
+    callbackURL: (SERVER) ? "https://triumphcourier.com"+ APP_DIRECTORY+"/googleLoggedin" : APP_DIRECTORY + "/googleLoggedin",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+  },
+    function (accessToken, refreshToken, profile, cb) {
+      let userProfile = profile._json;
+      User.findOne({
+        _id: userProfile.email
+      }, function (err, user) {
+        if (!err) {
+          if (user) {
+            console.log("Logged in as ----> " + user._id);
+            return cb(null, user)
+          } else {
+            console.log("user not found - creating new user");
+            let newUser = new User({
+              _id: userProfile.email,
+              username: userProfile.email,
+              firstName: userProfile.given_name,
+              lastName: userProfile.family_name,
+              photoURL: userProfile.picture
             });
+
+            newUser.save()
+              .then(function () {
+                return cb(null, user);
+              })
+              .catch(function (err) {
+                console.log("failed to create user");
+                console.log(err);
+                return cb(new Error(err));
+              });
+          }
+        } else {
+          console.log("***********Internal error*************");
+          console.log(err);
+          return cb(new Error(err));
         }
-      } else {
-        console.log("***********Internal error*************");
-        console.log(err);
-        return cb(new Error(err));
-      }
-    });
-  }
-));
+      });
+    }
+  ));
+}
 
 
 
@@ -742,12 +764,24 @@ app.post(APP_DIRECTORY + '/create-checkout-session', async (req, res) => {
   }
 });
 
-
+// Fallback for React SPA in public_html
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/auth') || req.path.startsWith('/stripe')) {
+    return next();
+  }
+  const indexHtml = path.join(__dirname, 'public_html', 'index.html');
+  if (fs.existsSync(indexHtml)) {
+    return res.sendFile(indexHtml);
+  }
+  next();
+});
 
 app.listen(process.env.PORT || 3025, function () {
-  clearTempFolder();
-  cacheBrands();
-  console.error("RoutingAssistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3025));
+  try { clearTempFolder(); } catch (e) {}
+  if (mongoose.connection && mongoose.connection.readyState === 1) {
+    try { cacheBrands(); } catch (e) {}
+  }
+  console.log("RoutingAssistant / SpeedX OpsBridge is live on port " + ((process.env.PORT) ? process.env.PORT : 3025));
 });
 
 
@@ -1399,17 +1433,21 @@ async function updateBrand(brand) {
 }
 
 async function clearTempFolder(){
-  fs.readdir(tempFilePath, (err, files) => {
-  if (err) throw err;
-
-  for (const file of files) {
-    if(file.startsWith("R4M") || file.startsWith("RW") || file.startsWith("bra")){
-      fs.unlink(path.join(tempFilePath, file), (err) => {
-        if (err) throw err; 
-      });
-    }
+  if (!fs.existsSync(tempFilePath)) {
+    try { fs.mkdirSync(tempFilePath, { recursive: true }); } catch (e) {}
+    return;
   }
-});
+  fs.readdir(tempFilePath, (err, files) => {
+    if (err || !files) return;
+
+    for (const file of files) {
+      if(file.startsWith("R4M") || file.startsWith("RW") || file.startsWith("bra")){
+        fs.unlink(path.join(tempFilePath, file), (err) => {
+          if (err) {}
+        });
+      }
+    }
+  });
 }
 
 function Body(title, error, message) {

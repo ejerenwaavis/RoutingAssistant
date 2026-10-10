@@ -6,6 +6,7 @@
   "dependencies": {
     "bcrypt": "^5.0.1",
     "body-parser": "^1.19.0",
+    "cors": "^2.8.6",
     "dotenv": "^8.2.0",
     "ejs": "^3.1.6",
     "exceljs": "^4.2.1",
@@ -13,6 +14,7 @@
     "express-session": "^1.17.1",
     "formidable": "^1.2.2",
     "mongoose": "^5.12.1",
+    "multer": "^2.4.0",
     "papaparse": "^5.3.0",
     "passport": "^0.6.0",
     "passport-facebook": "^3.0.0",
@@ -22,8 +24,12 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon server.js"
+    "build:client": "cd client && npm run build",
+    "build": "npm run build:client",
+    "start": "node server.js",
+    "test:parsers": "node test_parsers.js",
+    "test:api": "node test_api_endpoints.js",
+    "test": "node test_parsers.js && node test_api_endpoints.js"
   },
   "author": "Avis",
   "license": "ISC"
