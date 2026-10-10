@@ -22,6 +22,7 @@ export const Step1Ingest: React.FC<Step1IngestProps> = ({
   const [pastedText, setPastedText] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showUploader, setShowUploader] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
@@ -33,6 +34,7 @@ export const Step1Ingest: React.FC<Step1IngestProps> = ({
         throw new Error('No valid delivery stops or tracking numbers could be found in this file.');
       }
       onStopsLoaded(stops, file.name);
+      setShowUploader(false);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to read file. Please ensure it is a valid .xlsx or .csv manifest.');
     } finally {
@@ -54,6 +56,7 @@ export const Step1Ingest: React.FC<Step1IngestProps> = ({
       }
       onStopsLoaded(stops, 'Clipboard Paste');
       setPastedText('');
+      setShowUploader(false);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to parse clipboard text.');
     } finally {
@@ -70,6 +73,7 @@ export const Step1Ingest: React.FC<Step1IngestProps> = ({
         if (stops.length > 0) {
           onStopsLoaded(stops, 'Direct Clipboard');
           setPastedText('');
+          setShowUploader(false);
           return;
         }
       }
@@ -79,180 +83,196 @@ export const Step1Ingest: React.FC<Step1IngestProps> = ({
   };
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-xl">
+    <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-400 font-bold text-xs border border-emerald-500/30">
+          <div className="flex items-center gap-2.5">
+            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-50 text-blue-600 font-bold text-xs border border-blue-200">
               1
             </span>
-            <h2 className="text-base font-semibold text-zinc-100 tracking-tight">Ingestion Zone</h2>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Ingestion Zone</h2>
           </div>
-          <p className="text-xs text-zinc-400 mt-0.5">
+          <p className="text-xs text-slate-500 mt-1">
             Import manifests from SpeedX, OnTrac, GoFor Express, or raw spreadsheets.
           </p>
         </div>
 
-        {/* Tab Toggle */}
-        <div className="bg-zinc-950 p-1 rounded-xl border border-zinc-800 flex items-center gap-1 w-full sm:w-auto">
-          <button
-            onClick={() => setTab('upload')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              tab === 'upload'
-                ? 'bg-zinc-800 text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <UploadCloud className="h-3.5 w-3.5" />
-            <span>Upload File</span>
-          </button>
-          <button
-            onClick={() => setTab('paste')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              tab === 'paste'
-                ? 'bg-zinc-800 text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <ClipboardPaste className="h-3.5 w-3.5" />
-            <span>Smart Paste</span>
-          </button>
-        </div>
+        {/* Tab Toggle (Only visible if uploader is open or no data loaded) */}
+        {(!hasData || showUploader) && (
+          <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex items-center gap-1 w-full sm:w-auto">
+            <button
+              onClick={() => setTab('upload')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                tab === 'upload'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <UploadCloud className="h-3.5 w-3.5" />
+              <span>Upload File</span>
+            </button>
+            <button
+              onClick={() => setTab('paste')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                tab === 'paste'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ClipboardPaste className="h-3.5 w-3.5" />
+              <span>Smart Paste</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Active Loaded Manifest Display */}
+      {/* Active Loaded Manifest Display (Clean, High Visibility) */}
       {hasData && manifestMeta && manifestMeta.rawFilename && (
-        <div className="mb-4 p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
-          <div className="flex items-start sm:items-center gap-3 min-w-0">
-            <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
-              <FileSpreadsheet className="h-4.5 w-4.5" />
+        <div className="mb-3 p-4 sm:p-5 rounded-2xl bg-blue-50/70 border border-blue-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="p-2.5 rounded-xl bg-blue-600 text-white shrink-0 shadow-sm shadow-blue-500/30">
+              <FileSpreadsheet className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold text-zinc-100 font-mono break-all" title={manifestMeta.rawFilename}>
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <span className="text-sm sm:text-base font-bold text-slate-900 font-mono break-all" title={manifestMeta.rawFilename}>
                   {manifestMeta.rawFilename}
                 </span>
                 {manifestMeta.formattedDate ? (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-medium shrink-0">
-                    <Clock className="h-3 w-3 text-emerald-400" />
+                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 text-xs font-bold shrink-0 shadow-xs">
+                    <Clock className="h-3.5 w-3.5 text-blue-700" />
                     <span>Exported: {manifestMeta.formattedDate}</span>
                   </span>
                 ) : null}
               </div>
-              <p className="text-[11px] text-zinc-400 mt-0.5">
+              <p className="text-xs text-slate-600">
                 {manifestMeta.formattedDate
-                  ? 'SpeedX batch export timestamp detected and converted to local time'
-                  : 'Active manifest loaded and ready for partitioning'}
+                  ? 'SpeedX batch export timestamp detected and converted to local time.'
+                  : 'Active manifest loaded and ready for partitioning.'}
               </p>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 rounded-lg text-xs font-medium transition-colors shrink-0 cursor-pointer self-start sm:self-auto"
+            onClick={() => setShowUploader(prev => !prev)}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-300 rounded-xl text-xs font-semibold transition-all shadow-xs shrink-0 cursor-pointer self-start sm:self-auto"
           >
-            <RefreshCw className="h-3 w-3" />
-            <span>Replace File</span>
+            <RefreshCw className="h-3.5 w-3.5 text-slate-500" />
+            <span>{showUploader ? 'Hide Uploader' : 'Replace File'}</span>
           </button>
         </div>
       )}
 
       {errorMsg && (
-        <div className="mb-4 flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl text-xs">
-          <AlertCircle className="h-4 w-4 shrink-0" />
+        <div className="mb-4 flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-medium">
+          <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
           <span>{errorMsg}</span>
         </div>
       )}
 
-      {/* Tab 1: Upload File */}
-      {tab === 'upload' && (
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-          onDragLeave={() => setDragActive(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragActive(false);
-            if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
-          }}
-          onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-            dragActive
-              ? 'border-emerald-500 bg-emerald-500/5'
-              : 'border-zinc-700/60 hover:border-zinc-500 bg-zinc-950/40 hover:bg-zinc-950/70'
-          }`}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files?.[0]) handleFile(e.target.files[0]);
-              e.target.value = '';
-            }}
-          />
-          <div className="flex flex-col items-center justify-center gap-2">
-            {isLoading ? (
-              <Loader2 className="h-8 w-8 text-emerald-400 animate-spin" />
-            ) : (
-              <div className="h-12 w-12 rounded-xl bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center text-zinc-300">
-                <FileSpreadsheet className="h-6 w-6 text-emerald-400" />
+      {/* Upload Zone (Only visible when no data loaded OR user explicitly clicks Replace File) */}
+      {(!hasData || showUploader) && (
+        <>
+          {/* Tab 1: Upload File */}
+          {tab === 'upload' && (
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragActive(false);
+                if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-2xl p-8 sm:p-10 text-center cursor-pointer transition-all ${
+                dragActive
+                  ? 'border-blue-500 bg-blue-50/60'
+                  : 'border-slate-300 hover:border-blue-500 bg-slate-50/60 hover:bg-blue-50/30'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) handleFile(e.target.files[0]);
+                  e.target.value = '';
+                }}
+              />
+              <div className="flex flex-col items-center justify-center gap-2.5">
+                {isLoading ? (
+                  <Loader2 className="h-10 w-10 text-blue-600 animate-spin" />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-xs border border-blue-100">
+                    <UploadCloud className="h-7 w-7" />
+                  </div>
+                )}
+                <div>
+                  <p className="text-base font-bold text-slate-900">
+                    Drop a carrier manifest here
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    XLSX, XLS, CSV supported — no cleanup needed
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm shadow-blue-500/20 cursor-pointer pointer-events-none"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  <span>Choose file</span>
+                </button>
               </div>
-            )}
-            <div className="mt-1">
-              <p className="text-sm font-medium text-zinc-200">
-                Drop your manifest spreadsheet here, or <span className="text-emerald-400 underline decoration-emerald-500/40">browse</span>
-              </p>
-              <p className="text-xs text-zinc-500 mt-0.5">Supports .xlsx, .xls, and .csv files</p>
             </div>
-          </div>
-        </div>
-      )}
+          )}
 
-      {/* Tab 2: Smart Paste */}
-      {tab === 'paste' && (
-        <div className="flex flex-col gap-3">
-          <div className="relative">
-            <textarea
-              rows={4}
-              value={pastedText}
-              onChange={(e) => setPastedText(e.target.value)}
-              placeholder="Paste rows directly copied from SpeedX web tables, dispatch portals, or emails..."
-              className="w-full bg-zinc-950/70 border border-zinc-800 rounded-xl p-3.5 text-xs text-zinc-200 font-mono focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/40 placeholder:text-zinc-600 resize-y"
-            />
-          </div>
+          {/* Tab 2: Smart Paste */}
+          {tab === 'paste' && (
+            <div className="flex flex-col gap-3">
+              <div className="relative">
+                <textarea
+                  rows={4}
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                  placeholder="Paste rows directly copied from SpeedX web tables, dispatch portals, or emails..."
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400 resize-y"
+                />
+              </div>
 
-          <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={handleReadClipboard}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-950 border border-zinc-800 rounded-lg transition-colors cursor-pointer"
-            >
-              <ClipboardPaste className="h-3.5 w-3.5" />
-              <span>Paste from System Clipboard</span>
-            </button>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleReadClipboard}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 bg-white border border-slate-300 rounded-xl transition-all shadow-xs cursor-pointer"
+                >
+                  <ClipboardPaste className="h-3.5 w-3.5 text-slate-500" />
+                  <span>Paste from System Clipboard</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={handlePasteSubmit}
-              disabled={isLoading || !pastedText.trim()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-xs rounded-xl shadow-lg shadow-emerald-950/50 transition-all cursor-pointer"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  <span>Parsing...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>Parse Manifest</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+                <button
+                  type="button"
+                  onClick={handlePasteSubmit}
+                  disabled={isLoading || !pastedText.trim()}
+                  className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold text-xs rounded-xl shadow-sm shadow-blue-500/25 transition-all cursor-pointer"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Parsing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3.5 w-3.5" />
+                      <span>Parse Manifest</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

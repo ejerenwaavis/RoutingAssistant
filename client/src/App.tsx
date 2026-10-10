@@ -78,7 +78,7 @@ export function App() {
   }, [stops, selectedZips]);
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col text-zinc-100">
+    <div className="min-h-screen bg-slate-50 flex flex-col text-slate-800">
       <Header
         totalCount={stops.length}
         filteredCount={filteredStops.length}
@@ -87,7 +87,7 @@ export function App() {
         manifestMeta={manifestMeta}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 flex flex-col gap-5">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
         {/* Step 1: Ingestion Zone */}
         <Step1Ingest
           onStopsLoaded={handleStopsLoaded}
@@ -125,7 +125,7 @@ export function App() {
         )}
       </main>
 
-      <footer className="py-4 text-center text-xs text-zinc-600 border-t border-zinc-900 mt-auto">
+      <footer className="py-5 text-center text-xs text-slate-400 border-t border-slate-200 mt-auto bg-white">
         &copy; {new Date().getFullYear()} Routing Assistant · ACED DevOps & Logistics Tooling
       </footer>
     </div>
