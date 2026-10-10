@@ -285,6 +285,16 @@ app.route(APP_DIRECTORY + "/fileUpload")
       }
       var form = new formidable.IncomingForm();
       form.parse(req, async function (err, fields, files) {
+        if (err) {
+          console.error("Formidable upload error:", err);
+          return res.render("home.ejs", {
+            filePath: "",
+            body: new Body("Upload", "Error uploading file: " + (err.message || "Failed to upload file"), ""),
+            errors: [{ name: "", line: "Upload Error", fullAddress: err.message || "Upload failed" }],
+            user: req.user
+          });
+        }
+
         let upload = files.elicsv;
         if (!upload || !upload.path) {
           return res.render("home.ejs", {
@@ -341,7 +351,7 @@ app.route(APP_DIRECTORY + "/fileUpload")
             res.render("excellDownload.ejs", {
               filePath: downloadPath,
               body: new Body("Download", "", ""),
-              errors: errors && errors.length ? errors : null,
+              errors: Array.isArray(errors) ? errors : [],
               user: req.user
             });
           } else {
@@ -844,22 +854,27 @@ async function print(path) {
 }
 
 // deletes a targeted download after 2mins
-function deleteFile(path) {
+function deleteFile(targetPath) {
   setTimeout(function () {
-    fs.unlink(path, (err) => {
-      if (err) {
-        if (err.code == "ENOENT") {
-          console.log("File Does not exist");
-          return false;
+    if (!targetPath) return;
+    const baseName = path.basename(targetPath);
+    const candidatePaths = [
+      targetPath,
+      path.join(tempFilePath, baseName),
+      path.join(tempFilePath, targetPath.replace(/^\/+/, ''))
+    ];
+    const foundPath = candidatePaths.find(p => fs.existsSync(p));
+    if (foundPath) {
+      fs.unlink(foundPath, (err) => {
+        if (err) {
+          console.log("Delete error: " + err.message);
         } else {
-          console.log("Some other error: " + err.message);
-          return false;
+          console.log(foundPath + ': was deleted');
         }
-      } else {
-        console.log(path + ': was deleted');
-        return true;
-      }
-    });
+      });
+    } else {
+      console.log("File does not exist for deletion: " + targetPath);
+    }
   }, (1000 * 60 * 1));
 }
 

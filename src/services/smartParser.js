@@ -1,4 +1,4 @@
-﻿const fs = require('fs');
+const fs = require('fs');
 const path = require('path');
 const papa = require('papaparse');
 const XLSX = require('xlsx');
@@ -12,6 +12,28 @@ const US_STATES = new Set([
   'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
 ]);
 
+const STATE_NAME_MAP = {
+  'ALABAMA': 'AL', 'ALASKA': 'AK', 'ARIZONA': 'AZ', 'ARKANSAS': 'AR', 'CALIFORNIA': 'CA',
+  'COLORADO': 'CO', 'CONNECTICUT': 'CT', 'DELAWARE': 'DE', 'FLORIDA': 'FL', 'GEORGIA': 'GA',
+  'HAWAII': 'HI', 'IDAHO': 'ID', 'ILLINOIS': 'IL', 'INDIANA': 'IN', 'IOWA': 'IA',
+  'KANSAS': 'KS', 'KENTUCKY': 'KY', 'LOUISIANA': 'LA', 'MAINE': 'ME', 'MARYLAND': 'MD',
+  'MASSACHUSETTS': 'MA', 'MICHIGAN': 'MI', 'MINNESOTA': 'MN', 'MISSISSIPPI': 'MS', 'MISSOURI': 'MO',
+  'MONTANA': 'MT', 'NEBRASKA': 'NE', 'NEVADA': 'NV', 'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ',
+  'NEW MEXICO': 'NM', 'NEW YORK': 'NY', 'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', 'OHIO': 'OH',
+  'OKLAHOMA': 'OK', 'OREGON': 'OR', 'PENNSYLVANIA': 'PA', 'RHODE ISLAND': 'RI', 'SOUTH CAROLINA': 'SC',
+  'SOUTH DAKOTA': 'SD', 'TENNESSEE': 'TN', 'TEXAS': 'TX', 'UTAH': 'UT', 'VERMONT': 'VT',
+  'VIRGINIA': 'VA', 'WASHINGTON': 'WA', 'WEST VIRGINIA': 'WV', 'WISCONSIN': 'WI', 'WYOMING': 'WY',
+  'DISTRICT OF COLUMBIA': 'DC'
+};
+
+function normalizeState(val) {
+  if (!val || typeof val !== 'string') return '';
+  const clean = val.trim().toUpperCase().replace(/\.+$/, '');
+  if (US_STATES.has(clean)) return clean;
+  if (STATE_NAME_MAP[clean]) return STATE_NAME_MAP[clean];
+  return clean;
+}
+
 // Header matching regex definitions
 const HEADER_PATTERNS = {
   barcode: [/barcode/i, /^tracking/i, /tracking.*no/i, /tracking.*number/i, /package.*id/i, /piece.*id/i, /waybill/i, /awb/i, /label/i, /carton/i],
@@ -19,14 +41,14 @@ const HEADER_PATTERNS = {
   fullAddress: [/full.*addr/i, /^address$/i, /delivery.*addr/i, /destination.*addr/i, /ship.*to.*addr/i, /street.*addr/i, /^location$/i],
   street: [/street/i, /address.*1/i, /addr.*1/i, /line.*1/i, /^address$/i],
   street2: [/address.*2/i, /addr.*2/i, /line.*2/i, /unit/i, /apt/i, /suite/i, /ste/i, /bldg/i, /floor/i],
-  city: [/city/i, /town/i, /municipality/i],
+  city: [/city/i, /town/i, /municipality/i, /locality/i],
   state: [/state/i, /province/i, /^st$/i, /region/i],
   zipCode: [/zip/i, /postal/i, /postcode/i, /zipcode/i],
   country: [/country/i, /nation/i],
-  name: [/recipient/i, /customer.*name/i, /customer/i, /consignee/i, /addressee/i, /^name$/i],
-  phone: [/phone/i, /tel/i, /mobile/i, /contact/i],
-  status: [/status/i, /^last.*event$/i, /event/i, /state/i, /delivery.*status/i],
-  notes: [/note/i, /notes/i, /instruction/i, /remark/i, /comment/i, /gate.*code/i]
+  name: [/recipient/i, /customer.*name/i, /customer/i, /consignee/i, /addressee/i, /^name$/i, /^contact$/i],
+  phone: [/phone/i, /tel/i, /mobile/i, /contact.*phone/i],
+  status: [/status/i, /^last.*event$/i, /event/i, /delivery.*status/i],
+  notes: [/note/i, /notes/i, /instruction/i, /remark/i, /comment/i, /gate.*code/i, /desc/i]
 };
 
 /**
@@ -54,6 +76,19 @@ function parseFullAddress(addrStr) {
       state = candidateState;
       zipCode = match[2];
       remaining = raw.substring(0, match.index).trim();
+    }
+  }
+
+  // Fallback 1b: Match State alone at the end if ZIP was omitted
+  if (!state) {
+    const stateOnlyRegex = /(?:[\.,\s]+)\b([A-Za-z]{2})\b\.?\s*(?:[\.,\s]*(?:US|USA|United States))?\s*$/i;
+    const sMatch = remaining.match(stateOnlyRegex);
+    if (sMatch) {
+      const candidate = sMatch[1].toUpperCase();
+      if (US_STATES.has(candidate)) {
+        state = candidate;
+        remaining = remaining.substring(0, sMatch.index).trim();
+      }
     }
   }
 
@@ -302,14 +337,16 @@ async function parseManifest(filePath, options = {}, allBrands = []) {
     let zipCode = '';
     let country = 'US';
 
-    if (mapping.street !== undefined && mapping.city !== undefined) {
+    const streetCol = mapping.street !== undefined ? mapping.street : mapping.fullAddress;
+    if (streetCol !== undefined && mapping.city !== undefined) {
       // Manifest has discrete address columns
-      street = String(row[mapping.street] || '').trim();
+      street = String(row[streetCol] || '').trim();
       street2 = mapping.street2 !== undefined ? String(row[mapping.street2] || '').trim() : '';
       city = String(row[mapping.city] || '').trim();
-      state = mapping.state !== undefined ? String(row[mapping.state] || '').trim().toUpperCase() : '';
+      state = mapping.state !== undefined ? normalizeState(String(row[mapping.state] || '')) : '';
       zipCode = mapping.zipCode !== undefined ? String(row[mapping.zipCode] || '').trim() : '';
-      country = mapping.country !== undefined ? String(row[mapping.country] || '').trim().toUpperCase() || 'US' : 'US';
+      let rawCountry = mapping.country !== undefined ? String(row[mapping.country] || '').trim().toUpperCase() : 'US';
+      country = (rawCountry.length > 3 || !rawCountry) ? 'US' : rawCountry;
     } else {
       // Manifest has combined address column
       const fullAddrRaw = mapping.fullAddress !== undefined
@@ -322,9 +359,9 @@ async function parseManifest(filePath, options = {}, allBrands = []) {
       street = parsedAddr.street;
       street2 = mapping.street2 !== undefined ? String(row[mapping.street2] || '').trim() : parsedAddr.street2;
       city = mapping.city !== undefined ? String(row[mapping.city] || '').trim() : parsedAddr.city;
-      state = mapping.state !== undefined ? String(row[mapping.state] || '').trim().toUpperCase() : parsedAddr.state;
+      state = mapping.state !== undefined ? normalizeState(String(row[mapping.state] || '')) : parsedAddr.state;
       zipCode = mapping.zipCode !== undefined ? String(row[mapping.zipCode] || '').trim() : parsedAddr.zipCode;
-      country = parsedAddr.country;
+      country = parsedAddr.country || 'US';
     }
 
     if (!street || street === 'Unknown Street') {
