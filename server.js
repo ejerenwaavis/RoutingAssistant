@@ -67,12 +67,16 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 // Configure app to user EJS abd bodyParser
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({
-  extended: true
+  extended: true,
+  limit: "50mb"
 }));
+app.use(bodyParser.json({
+  limit: "50mb"
+}));
+app.use(express.json({ limit: "50mb" }));
 app.use(express.static("public"));
 app.use(express.static(tempFilePath));
 app.use(express.static("."));
-app.use(express.json());
 
 
 /******************** Authentication Setup & Config *************/
@@ -396,7 +400,12 @@ app.post(APP_DIRECTORY + "/api/manifest/parse", async function (req, res) {
 
 app.post(APP_DIRECTORY + "/api/manifest/export", function (req, res) {
   try {
-    const { stops, format } = req.body;
+    let body = req.body;
+    if (typeof body === "string") {
+      try { body = JSON.parse(body); } catch (e) {}
+    }
+    const stops = body ? body.stops : null;
+    const format = body ? body.format : null;
     if (!Array.isArray(stops) || stops.length === 0) {
       return res.status(400).json({ error: "No stops provided for export" });
     }
