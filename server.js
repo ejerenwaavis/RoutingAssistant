@@ -74,6 +74,7 @@ app.use(bodyParser.json({
   limit: "50mb"
 }));
 app.use(express.json({ limit: "50mb" }));
+app.use(express.static("public_html", { index: false }));
 app.use(express.static("public"));
 app.use(express.static(tempFilePath));
 app.use(express.static("."));
@@ -266,8 +267,11 @@ passport.use(new GoogleStrategy({
 
 app.route(APP_DIRECTORY + "/")
   .get(function (req, res) {
-    // print(tempFilePath);
     if (req.isAuthenticated()) {
+      const indexPath = path.resolve(__dirname, "public_html/index.html");
+      if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+      }
       res.render("home.ejs", {
         body: new Body("Upload", "", ""),
         user: req.user,
@@ -275,7 +279,22 @@ app.route(APP_DIRECTORY + "/")
     } else {
       res.redirect(APP_DIRECTORY + "/login");
     }
-  })
+  });
+
+app.get(APP_DIRECTORY + "/api/user/me", function (req, res) {
+  if (req.isAuthenticated() && req.user) {
+    return res.json({
+      user: {
+        id: req.user._id,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        isProUser: req.user.isProUser
+      }
+    });
+  }
+  res.status(401).json({ error: "Unauthorized" });
+});
 
 app.route(APP_DIRECTORY + "/fileUpload")
   .post(async function (req, res) {

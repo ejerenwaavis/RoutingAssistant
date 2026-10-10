@@ -23,6 +23,7 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "npm --prefix client run build",
     "start": "nodemon server.js"
   },
   "author": "Avis",

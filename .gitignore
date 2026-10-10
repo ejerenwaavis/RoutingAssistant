@@ -122,3 +122,7 @@ public/media-resources/
 #probably affecting the heroku tmpFolder
 tmp/
 tmp
+
+# Mockups and references
+mockup.zip
+mockup_reference/
