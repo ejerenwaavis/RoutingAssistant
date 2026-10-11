@@ -91,13 +91,34 @@ export function parseFullAddress(addrStr: string) {
 const TRACK_RE = /\b(SPX[A-Z0-9]{8,}|1LS[A-Z0-9]{10,}|TBA\d{9,}|1Z[A-Z0-9]{16}|\d{12,24})\b/g;
 const NOISE_RE = /^(home|dashboard|menu|search|logout|status|driver|zip|actions?|page \d+|showing \d+.*|barcode|address)$/i;
 
-export function parseClipboard(text: string): Stop[] {
-  if (!text || !text.trim()) return [];
+import type { Stop, ParseResult } from '../types';
+
+export const SEQ_HEADER_REGEX = /^(seq|seq\s*#|seq\s*no\.?|sequence|stop\s*#|stop\s*no\.?|stop_index|stop|stop\s*number)$/i;
+export const STATUS_HEADER_REGEX = /^(status|final[\s_]?status|delivery[\s_]?status|event[\s_]?status|last[\s_]?event|state|order[\s_]?status)$/i;
+
+export function isDeliveredStatus(statusStr: string): boolean {
+  if (!statusStr) return false;
+  const s = statusStr.trim().toUpperCase();
+  return /^(DELIVERED|COMPLETE|COMPLETED|SUCCESS|POD|DELIVERED_TO_CUSTOMER)$/i.test(s);
+}
+
+export function getDefaultSelectedStatuses(uniqueStatuses: string[]): Set<string> {
+  const activeStatuses = uniqueStatuses.filter(s => !isDeliveredStatus(s));
+  // Default behavior: Auto-check pending/active stops (NEW, ATTEMPTED, FAILED, OUT_FOR_DELIVERY) and leave DELIVERED unchecked
+  if (activeStatuses.length > 0) {
+    return new Set(activeStatuses);
+  }
+  // Fallback: if all stops in the file are DELIVERED, select all
+  return new Set(uniqueStatuses);
+}
+
+export function parseClipboard(text: string): ParseResult {
+  if (!text || !text.trim()) return { stops: [], hasStatusColumn: false };
 
   const matches = [...text.matchAll(TRACK_RE)];
-  if (!matches.length) return [];
+  if (!matches.length) return { stops: [], hasStatusColumn: false };
 
-  return matches.map((m, idx) => {
+  const stops: Stop[] = matches.map((m, idx) => {
     const seg = text.slice(m.index! + m[0].length, matches[idx + 1]?.index ?? text.length);
     const lines = seg.split(/[\n\t\r]+/).map(l => l.trim()).filter(l => l && !NOISE_RE.test(l));
 
@@ -118,7 +139,7 @@ export function parseClipboard(text: string): Stop[] {
 
     return {
       id: `clip_${idx}_${Date.now()}`,
-      seq: idx + 1,
+      seq: null, // Unsequenced clipboard paste
       barcode: m[0],
       recipient: nameCandidate,
       street: parsedAddr.street || addrLine,
@@ -129,9 +150,11 @@ export function parseClipboard(text: string): Stop[] {
       country: 'US',
       phone,
       notes: m[0],
-      status: 'Pending'
+      status: 'NEW'
     };
   });
+
+  return { stops, hasStatusColumn: false };
 }
 
 const HEADER_MAP: Record<string, keyof Stop | 'fullAddress'> = {
@@ -150,7 +173,7 @@ const HEADER_MAP: Record<string, keyof Stop | 'fullAddress'> = {
   route: 'route', routeid: 'route', routecode: 'route', routename: 'route', batch: 'route', wave: 'route'
 };
 
-export async function parseFile(file: File): Promise<Stop[]> {
+export async function parseFile(file: File): Promise<ParseResult> {
   const ext = file.name.split('.').pop()?.toLowerCase();
 
   let rawRows: any[][] = [];
@@ -168,7 +191,7 @@ export async function parseFile(file: File): Promise<Stop[]> {
     rawRows = res.data as any[][];
   }
 
-  if (!rawRows || rawRows.length < 2) return [];
+  if (!rawRows || rawRows.length < 2) return { stops: [], hasStatusColumn: false };
 
   // Detect header row (first 10 rows)
   let headerRowIdx = 0;
@@ -180,30 +203,95 @@ export async function parseFile(file: File): Promise<Stop[]> {
     }
   }
 
-  const headerRow = rawRows[headerRowIdx].map((c: any) => String(c).trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const rawHeaders = rawRows[headerRowIdx].map((c: any) => String(c ?? '').trim());
   const colMap: Record<string, number> = {};
 
-  headerRow.forEach((col, idx) => {
+  rawHeaders.forEach((rawCol, idx) => {
+    const cleanHeader = rawCol.trim();
+
+    // 1. Precise regex checks for Sequence header aliases:
+    // /^(seq|seq\s*#|seq\s*no\.?|sequence|stop\s*#|stop\s*no\.?|stop_index|stop)$/i
+    if (colMap.seq === undefined && SEQ_HEADER_REGEX.test(cleanHeader)) {
+      colMap.seq = idx;
+    }
+
+    // 2. Precise regex checks for Status header aliases:
+    // /^(status|final_?status|delivery_?status|event_?status|state)$/i
+    if (colMap.status === undefined && STATUS_HEADER_REGEX.test(cleanHeader)) {
+      // If header is 'state', verify it isn't the US State address column
+      if (!/^state$/i.test(cleanHeader)) {
+        colMap.status = idx;
+      } else {
+        // Check if data rows in this column look like 2-letter US states
+        const sampleValues = rawRows.slice(headerRowIdx + 1, headerRowIdx + 11).map(r => String(r[idx] || '').trim().toUpperCase());
+        const looksLikeUSState = sampleValues.some(v => US_STATES.has(v));
+        if (!looksLikeUSState) {
+          colMap.status = idx;
+        }
+      }
+    }
+
+    // 3. Normalized fallback using HEADER_MAP for other standard columns
+    const normCol = cleanHeader.toLowerCase().replace(/[^a-z0-9]/g, '');
     for (const [pattern, field] of Object.entries(HEADER_MAP)) {
-      if (col.includes(pattern) && colMap[field] === undefined) {
+      if (normCol.includes(pattern) && colMap[field] === undefined) {
+        if (field === 'seq' && colMap.seq !== undefined) continue;
+        if (field === 'status' && colMap.status !== undefined) continue;
         colMap[field] = idx;
       }
     }
   });
 
   const dataRows = rawRows.slice(headerRowIdx + 1);
+
+  // Ingestion Validation: Inspect all sequence values in the batch.
+  // - If values contain distinct non-zero integers (> 0), preserve and export that sequence.
+  // - If values are all 0 (common in SpeedX unsequenced batches), missing, or empty:
+  //   Do NOT auto-assign index numbers (1, 2, 3...). Leave 'Stop Number' blank ("").
+  let hasValidNonZeroSequence = false;
+  if (colMap.seq !== undefined) {
+    for (const row of dataRows) {
+      if (!row || row.length === 0) continue;
+      const rawVal = String(row[colMap.seq] ?? '').trim();
+      const num = parseFloat(rawVal);
+      if (!isNaN(num) && num > 0) {
+        hasValidNonZeroSequence = true;
+        break;
+      }
+    }
+  }
+
+  const hasStatusColumn = colMap.status !== undefined;
   const stops: Stop[] = [];
 
   dataRows.forEach((row, i) => {
     if (!row || row.length === 0 || row.every((c: any) => !c)) return;
 
     const barcode = colMap.barcode !== undefined ? String(row[colMap.barcode] || '').trim() : '';
-    const rawSeq = colMap.seq !== undefined ? String(row[colMap.seq] || '').trim() : '';
-    const seq = parseFloat(rawSeq) || (i + 1);
+
+    // Flexible Sequence Normalization:
+    // If batch has valid non-zero sequences, parse and preserve.
+    // If batch was unsequenced / all-zeros, leave seq as null!
+    let seq: number | null = null;
+    if (hasValidNonZeroSequence && colMap.seq !== undefined) {
+      const rawSeq = String(row[colMap.seq] ?? '').trim();
+      const parsed = parseFloat(rawSeq);
+      if (!isNaN(parsed) && parsed > 0) {
+        seq = parsed;
+      }
+    }
+
     const recipient = colMap.recipient !== undefined ? String(row[colMap.recipient] || '').trim() : '';
     const phone = colMap.phone !== undefined ? String(row[colMap.phone] || '').trim() : '';
     const notes = colMap.notes !== undefined ? String(row[colMap.notes] || '').trim() : '';
-    const status = colMap.status !== undefined ? String(row[colMap.status] || '').trim() : 'Pending';
+
+    // Status Slicer normalization
+    let status = 'NEW';
+    if (hasStatusColumn) {
+      const rawStatus = String(row[colMap.status] ?? '').trim();
+      status = rawStatus ? rawStatus.toUpperCase() : 'NEW';
+    }
+
     const driver = colMap.driver !== undefined ? String(row[colMap.driver] || '').trim() : '';
     const route = colMap.route !== undefined ? String(row[colMap.route] || '').trim() : '';
 
@@ -236,9 +324,9 @@ export async function parseFile(file: File): Promise<Stop[]> {
     if (street || barcode) {
       stops.push({
         id: `stop_${i}_${Date.now()}`,
-        seq,
-        barcode: barcode || `STOP-${seq}`,
-        recipient: recipient || (barcode ? `Stop ${seq} - ${barcode}` : `Stop ${seq}`),
+        seq, // number | null
+        barcode: barcode || (seq !== null ? `STOP-${seq}` : `STOP-${i + 1}`),
+        recipient: recipient || (barcode ? (seq !== null ? `Stop ${seq} - ${barcode}` : barcode) : (seq !== null ? `Stop ${seq}` : `Stop ${i + 1}`)),
         street: street || 'Unknown Street',
         unit,
         city,
@@ -254,5 +342,9 @@ export async function parseFile(file: File): Promise<Stop[]> {
     }
   });
 
-  return stops;
+  return {
+    stops,
+    hasStatusColumn
+  };
 }
+

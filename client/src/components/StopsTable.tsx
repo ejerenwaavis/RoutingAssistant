@@ -10,6 +10,8 @@ export const StopsTable: React.FC<StopsTableProps> = ({ stops }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const hasAnyStatus = stops.some(s => s.status && s.status !== 'NEW' && s.status !== 'Pending');
+
   const filtered = stops.filter(s => {
     if (!searchTerm.trim()) return true;
     const q = searchTerm.toLowerCase();
@@ -19,7 +21,8 @@ export const StopsTable: React.FC<StopsTableProps> = ({ stops }) => {
       s.city.toLowerCase().includes(q) ||
       s.zip.toLowerCase().includes(q) ||
       s.recipient.toLowerCase().includes(q) ||
-      String(s.seq).includes(q)
+      (s.status && s.status.toLowerCase().includes(q)) ||
+      (s.seq !== null && String(s.seq).includes(q))
     );
   });
 
@@ -48,7 +51,7 @@ export const StopsTable: React.FC<StopsTableProps> = ({ stops }) => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search address, tracking, zip, recipient..."
+            placeholder="Search address, tracking, zip, status..."
             className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
@@ -60,6 +63,7 @@ export const StopsTable: React.FC<StopsTableProps> = ({ stops }) => {
           <thead className="bg-slate-50 text-slate-700 sticky top-0 z-10 border-b border-slate-200 font-semibold">
             <tr>
               <th className="py-2.5 px-3.5 w-16 text-slate-900">Stop #</th>
+              {hasAnyStatus && <th className="py-2.5 px-3.5 w-28">Status</th>}
               <th className="py-2.5 px-3.5">Tracking ID</th>
               <th className="py-2.5 px-3.5">Address</th>
               <th className="py-2.5 px-3.5 w-24">Zip</th>
@@ -69,7 +73,7 @@ export const StopsTable: React.FC<StopsTableProps> = ({ stops }) => {
           <tbody className="divide-y divide-slate-100 text-slate-800">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-10 text-center text-slate-400 font-medium">
+                <td colSpan={hasAnyStatus ? 6 : 5} className="py-10 text-center text-slate-400 font-medium">
                   No matching stops found for "{searchTerm}".
                 </td>
               </tr>
@@ -77,8 +81,21 @@ export const StopsTable: React.FC<StopsTableProps> = ({ stops }) => {
               filtered.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-2.5 px-3.5 font-bold font-mono text-blue-600">
-                    {s.seq}
+                    {s.seq !== null && s.seq !== undefined ? s.seq : '-'}
                   </td>
+                  {hasAnyStatus && (
+                    <td className="py-2.5 px-3.5">
+                      <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                        s.status === 'DELIVERED'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : s.status.includes('FAIL') || s.status.includes('ATTEMPT') || s.status.includes('EXCEPTION')
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : 'bg-blue-50 text-blue-700 border border-blue-200'
+                      }`}>
+                        {s.status}
+                      </span>
+                    </td>
+                  )}
                   <td className="py-2.5 px-3.5">
                     <div className="flex items-center gap-1.5 group">
                       <span className="font-mono text-slate-800 font-semibold truncate max-w-[150px]">{s.barcode}</span>

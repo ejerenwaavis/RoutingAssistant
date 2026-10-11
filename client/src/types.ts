@@ -1,6 +1,6 @@
 export interface Stop {
   id: string;
-  seq: number;
+  seq: number | null;
   barcode: string;
   recipient: string;
   street: string;
@@ -27,7 +27,7 @@ export interface CageScanResult {
   driver?: string;
   zip?: string;
   address?: string;
-  seq?: number;
+  seq?: number | null;
   recipient?: string;
 }
 
@@ -45,5 +45,12 @@ export interface ManifestMetadata {
   timestamp: number | null;
   formattedDate: string | null;
   sourceType: 'file' | 'clipboard';
+  hasStatusColumn?: boolean;
 }
+
+export interface ParseResult {
+  stops: Stop[];
+  hasStatusColumn: boolean;
+}
+
 

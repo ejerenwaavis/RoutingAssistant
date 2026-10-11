@@ -22,8 +22,8 @@ export function generateCircuitCsv(stops: Stop[]): string {
     'Notes'
   ];
 
-  const rows = stops.map((s, idx) => [
-    idx + 1,
+  const rows = stops.map(s => [
+    s.seq !== null && s.seq !== undefined ? s.seq : '',
     [s.street, s.city, s.state].filter(Boolean).join(', '),
     s.unit || '',
     s.zip || '',
@@ -54,7 +54,7 @@ export function generateRoadWarriorCsv(stops: Stop[]): string {
   ];
 
   const rows = stops.map(s => [
-    s.recipient || s.barcode || `Stop ${s.seq}`,
+    s.recipient || s.barcode || (s.seq !== null && s.seq !== undefined ? `Stop ${s.seq}` : 'Delivery'),
     [s.street, s.unit].filter(Boolean).join(', '),
     s.city || '',
     s.state || '',
@@ -80,7 +80,7 @@ export function generateRoute4MeCsv(stops: Stop[]): string {
       `${s.state} ${s.zip}`.trim(),
       s.country || 'US'
     ].filter(Boolean).join(', ');
-    const alias = s.barcode || s.recipient || `Stop ${s.seq}`;
+    const alias = s.barcode || s.recipient || (s.seq !== null && s.seq !== undefined ? `Stop ${s.seq}` : 'Stop');
     return [full, alias];
   });
 
@@ -101,8 +101,8 @@ export function generateGroundCloudCsv(stops: Stop[]): string {
     'Comments'
   ];
 
-  const rows = stops.map((s, idx) => [
-    idx + 1,
+  const rows = stops.map(s => [
+    s.seq !== null && s.seq !== undefined ? s.seq : '',
     s.barcode || '',
     s.street || '',
     s.unit || '',

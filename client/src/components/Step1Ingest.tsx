@@ -4,7 +4,7 @@ import { parseFile, parseClipboard } from '../lib/parser';
 import type { Stop, ManifestMetadata } from '../types';
 
 interface Step1IngestProps {
-  onStopsLoaded: (stops: Stop[], sourceName: string) => void;
+  onStopsLoaded: (stops: Stop[], sourceName: string, hasStatusColumn?: boolean) => void;
   isLoading: boolean;
   setIsLoading: (val: boolean) => void;
   hasData: boolean;
@@ -29,11 +29,11 @@ export const Step1Ingest: React.FC<Step1IngestProps> = ({
     setErrorMsg(null);
     setIsLoading(true);
     try {
-      const stops = await parseFile(file);
+      const { stops, hasStatusColumn } = await parseFile(file);
       if (stops.length === 0) {
         throw new Error('No valid delivery stops or tracking numbers could be found in this file.');
       }
-      onStopsLoaded(stops, file.name);
+      onStopsLoaded(stops, file.name, hasStatusColumn);
       setShowUploader(false);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to read file. Please ensure it is a valid .xlsx or .csv manifest.');
@@ -50,11 +50,11 @@ export const Step1Ingest: React.FC<Step1IngestProps> = ({
     }
     setIsLoading(true);
     try {
-      const stops = parseClipboard(pastedText);
+      const { stops, hasStatusColumn } = parseClipboard(pastedText);
       if (stops.length === 0) {
         throw new Error('No tracking numbers found. Make sure the copied text includes barcodes like SPX..., 1LS..., etc.');
       }
-      onStopsLoaded(stops, 'Clipboard Paste');
+      onStopsLoaded(stops, 'Clipboard Paste', hasStatusColumn);
       setPastedText('');
       setShowUploader(false);
     } catch (err: any) {

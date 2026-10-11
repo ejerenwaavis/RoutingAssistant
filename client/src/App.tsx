@@ -6,13 +6,16 @@ import { Step3Export } from './components/Step3Export';
 import { StopsTable } from './components/StopsTable';
 import { CageVerifier } from './components/CageVerifier';
 import { extractTimestampFromFilename } from './lib/filenameHelper';
+import { isDeliveredStatus, getDefaultSelectedStatuses } from './lib/parser';
 import type { Stop, UserProfile, ManifestMetadata, AppMode } from './types';
-import { ScanBarcode, FileSpreadsheet } from 'lucide-react';
+import { ScanBarcode } from 'lucide-react';
 
 export function App() {
   const [activeMode, setActiveMode] = useState<AppMode>('slicer');
   const [stops, setStops] = useState<Stop[]>([]);
   const [selectedZips, setSelectedZips] = useState<Set<string>>(new Set());
+  const [hasStatusColumn, setHasStatusColumn] = useState<boolean>(false);
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [sourceName, setSourceName] = useState<string>('');
   const [manifestMeta, setManifestMeta] = useState<ManifestMetadata | null>(null);
@@ -28,17 +31,32 @@ export function App() {
       .catch(() => {});
   }, []);
 
-  const handleStopsLoaded = (loadedStops: Stop[], source: string) => {
+  const handleStopsLoaded = (loadedStops: Stop[], source: string, hasStatus?: boolean) => {
     setStops(loadedStops);
     setSourceName(source);
 
+    const statusPresent = !!hasStatus || loadedStops.some(s => s.status && s.status !== 'NEW' && s.status !== 'Pending');
+    setHasStatusColumn(statusPresent);
+
     // Extract SpeedX 13-digit timestamp if present in the filename
     const meta = extractTimestampFromFilename(source);
-    setManifestMeta(meta);
+    setManifestMeta({
+      ...meta,
+      hasStatusColumn: statusPresent
+    });
 
     // By default, select all detected zips
     const allZips = new Set(loadedStops.map(s => s.zip || 'Unknown'));
     setSelectedZips(allZips);
+
+    // Default behavior for Status Slicer:
+    // Auto-check pending/active stops (NEW, ATTEMPTED, FAILED, OUT_FOR_DELIVERY) and leave DELIVERED unchecked
+    if (statusPresent) {
+      const uniqueStatuses = Array.from(new Set(loadedStops.map(s => s.status || 'NEW')));
+      setSelectedStatuses(getDefaultSelectedStatuses(uniqueStatuses));
+    } else {
+      setSelectedStatuses(new Set());
+    }
   };
 
   const handleToggleZip = (zip: string) => {
@@ -53,18 +71,46 @@ export function App() {
     });
   };
 
-  const handleSelectAll = () => {
+  const handleSelectAllZips = () => {
     const all = new Set(stops.map(s => s.zip || 'Unknown'));
     setSelectedZips(all);
   };
 
-  const handleDeselectAll = () => {
+  const handleDeselectAllZips = () => {
     setSelectedZips(new Set());
+  };
+
+  const handleToggleStatus = (status: string) => {
+    setSelectedStatuses(prev => {
+      const next = new Set(prev);
+      if (next.has(status)) {
+        next.delete(status);
+      } else {
+        next.add(status);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectActiveStatuses = () => {
+    const uniqueStatuses = Array.from(new Set(stops.map(s => s.status || 'NEW')));
+    setSelectedStatuses(new Set(uniqueStatuses.filter(s => !isDeliveredStatus(s))));
+  };
+
+  const handleSelectAllStatuses = () => {
+    const uniqueStatuses = Array.from(new Set(stops.map(s => s.status || 'NEW')));
+    setSelectedStatuses(new Set(uniqueStatuses));
+  };
+
+  const handleDeselectAllStatuses = () => {
+    setSelectedStatuses(new Set());
   };
 
   const handleReset = () => {
     setStops([]);
     setSelectedZips(new Set());
+    setSelectedStatuses(new Set());
+    setHasStatusColumn(false);
     setSourceName('');
     setManifestMeta(null);
   };
@@ -74,11 +120,15 @@ export function App() {
     return new Set(stops.map(s => s.zip || 'Unknown')).size;
   }, [stops]);
 
-  // Filter stops based on selected ZIPs
+  // Filter stops based on selected ZIPs AND selected Statuses
   const filteredStops = useMemo(() => {
     if (stops.length === 0) return [];
-    return stops.filter(s => selectedZips.has(s.zip || 'Unknown'));
-  }, [stops, selectedZips]);
+    return stops.filter(s => {
+      const zipMatch = selectedZips.has(s.zip || 'Unknown');
+      const statusMatch = !hasStatusColumn || selectedStatuses.has(s.status || 'NEW');
+      return zipMatch && statusMatch;
+    });
+  }, [stops, selectedZips, selectedStatuses, hasStatusColumn]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-800">
@@ -108,13 +158,19 @@ export function App() {
             {/* Steps 2, 3 and Preview appear immediately after ingestion */}
             {stops.length > 0 && (
               <>
-                {/* Step 2: Zip Code Slicer */}
+                {/* Step 2: Zip Code & Status Slicer */}
                 <Step2ZipSlicer
                   stops={stops}
                   selectedZips={selectedZips}
+                  selectedStatuses={selectedStatuses}
+                  hasStatusColumn={hasStatusColumn}
                   onToggleZip={handleToggleZip}
-                  onSelectAll={handleSelectAll}
-                  onDeselectAll={handleDeselectAll}
+                  onSelectAllZips={handleSelectAllZips}
+                  onDeselectAllZips={handleDeselectAllZips}
+                  onToggleStatus={handleToggleStatus}
+                  onSelectActiveStatuses={handleSelectActiveStatuses}
+                  onSelectAllStatuses={handleSelectAllStatuses}
+                  onDeselectAllStatuses={handleDeselectAllStatuses}
                   manifestMeta={manifestMeta}
                 />
 
