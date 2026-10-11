@@ -226,7 +226,7 @@ export function App() {
       </main>
 
       <footer className="py-5 text-center text-xs text-slate-400 border-t border-slate-200 mt-auto bg-white">
-        &copy; {new Date().getFullYear()} Routing Assistant · ACED DevOps & Logistics Tooling
+        &copy; {new Date().getFullYear()} Routing Assistant · ACED DevOps
       </footer>
     </div>
   );
