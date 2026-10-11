@@ -145,7 +145,9 @@ const HEADER_MAP: Record<string, keyof Stop | 'fullAddress'> = {
   recipient: 'recipient', name: 'recipient', customer: 'recipient', customername: 'recipient',
   phone: 'phone', contact: 'phone', mobile: 'phone',
   notes: 'notes', note: 'notes', comments: 'notes', instructions: 'notes',
-  status: 'status', lastevent: 'status'
+  status: 'status', lastevent: 'status',
+  driver: 'driver', drivername: 'driver', courier: 'driver', assigneddriver: 'driver', da: 'driver',
+  route: 'route', routeid: 'route', routecode: 'route', routename: 'route', batch: 'route', wave: 'route'
 };
 
 export async function parseFile(file: File): Promise<Stop[]> {
@@ -202,6 +204,8 @@ export async function parseFile(file: File): Promise<Stop[]> {
     const phone = colMap.phone !== undefined ? String(row[colMap.phone] || '').trim() : '';
     const notes = colMap.notes !== undefined ? String(row[colMap.notes] || '').trim() : '';
     const status = colMap.status !== undefined ? String(row[colMap.status] || '').trim() : 'Pending';
+    const driver = colMap.driver !== undefined ? String(row[colMap.driver] || '').trim() : '';
+    const route = colMap.route !== undefined ? String(row[colMap.route] || '').trim() : '';
 
     let street = '';
     let unit = colMap.unit !== undefined ? String(row[colMap.unit] || '').trim() : '';
@@ -243,7 +247,9 @@ export async function parseFile(file: File): Promise<Stop[]> {
         country: 'US',
         phone,
         notes: notes || barcode,
-        status
+        status,
+        driver: driver || undefined,
+        route: route || undefined
       });
     }
   });

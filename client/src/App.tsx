@@ -4,10 +4,13 @@ import { Step1Ingest } from './components/Step1Ingest';
 import { Step2ZipSlicer } from './components/Step2ZipSlicer';
 import { Step3Export } from './components/Step3Export';
 import { StopsTable } from './components/StopsTable';
+import { CageVerifier } from './components/CageVerifier';
 import { extractTimestampFromFilename } from './lib/filenameHelper';
-import type { Stop, UserProfile, ManifestMetadata } from './types';
+import type { Stop, UserProfile, ManifestMetadata, AppMode } from './types';
+import { ScanBarcode, FileSpreadsheet } from 'lucide-react';
 
 export function App() {
+  const [activeMode, setActiveMode] = useState<AppMode>('slicer');
   const [stops, setStops] = useState<Stop[]>([]);
   const [selectedZips, setSelectedZips] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
@@ -85,42 +88,83 @@ export function App() {
         onReset={handleReset}
         user={user}
         manifestMeta={manifestMeta}
+        activeMode={activeMode}
+        onModeChange={setActiveMode}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
-        {/* Step 1: Ingestion Zone */}
-        <Step1Ingest
-          onStopsLoaded={handleStopsLoaded}
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-          hasData={stops.length > 0}
-          manifestMeta={manifestMeta}
-        />
-
-        {/* Steps 2, 3 and Preview appear immediately after ingestion */}
-        {stops.length > 0 && (
+        {/* MODE 1: ROUTE SLICER */}
+        {activeMode === 'slicer' && (
           <>
-            {/* Step 2: Zip Code Slicer */}
-            <Step2ZipSlicer
-              stops={stops}
-              selectedZips={selectedZips}
-              onToggleZip={handleToggleZip}
-              onSelectAll={handleSelectAll}
-              onDeselectAll={handleDeselectAll}
+            {/* Step 1: Ingestion Zone */}
+            <Step1Ingest
+              onStopsLoaded={handleStopsLoaded}
+              isLoading={isLoading}
+              setIsLoading={setIsLoading}
+              hasData={stops.length > 0}
               manifestMeta={manifestMeta}
             />
 
-            {/* Step 3: One-Click Export */}
-            <Step3Export
-              filteredStops={filteredStops}
-              selectedZips={Array.from(selectedZips)}
-              totalZipsCount={allUniqueZipsCount}
-            />
+            {/* Steps 2, 3 and Preview appear immediately after ingestion */}
+            {stops.length > 0 && (
+              <>
+                {/* Step 2: Zip Code Slicer */}
+                <Step2ZipSlicer
+                  stops={stops}
+                  selectedZips={selectedZips}
+                  onToggleZip={handleToggleZip}
+                  onSelectAll={handleSelectAll}
+                  onDeselectAll={handleDeselectAll}
+                  manifestMeta={manifestMeta}
+                />
 
-            {/* Compact Preview Table */}
-            <StopsTable
-              stops={filteredStops}
-            />
+                {/* Step 3: One-Click Export */}
+                <Step3Export
+                  filteredStops={filteredStops}
+                  selectedZips={Array.from(selectedZips)}
+                  totalZipsCount={allUniqueZipsCount}
+                />
+
+                {/* Compact Preview Table */}
+                <StopsTable
+                  stops={filteredStops}
+                />
+              </>
+            )}
+          </>
+        )}
+
+        {/* MODE 2: CAGE / GAYLORD VERIFIER */}
+        {activeMode === 'cage_verifier' && (
+          <>
+            {stops.length === 0 ? (
+              <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
+                <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 text-center flex flex-col items-center gap-2">
+                  <div className="h-10 w-10 rounded-xl bg-blue-600 text-white grid place-items-center shadow-xs">
+                    <ScanBarcode className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-slate-900 text-base">Manifest Required for Cage Verification</h3>
+                  <p className="text-xs text-slate-600 max-w-md">
+                    Please upload or smart-paste today&apos;s manifest file (.xlsx / .csv). All packages and tracking numbers will be automatically indexed for high-speed container scanning.
+                  </p>
+                </div>
+
+                <Step1Ingest
+                  onStopsLoaded={handleStopsLoaded}
+                  isLoading={isLoading}
+                  setIsLoading={setIsLoading}
+                  hasData={false}
+                  manifestMeta={null}
+                />
+              </div>
+            ) : (
+              <CageVerifier
+                stops={stops}
+                manifestMeta={manifestMeta}
+                user={user}
+                onSwitchToSlicer={() => setActiveMode('slicer')}
+              />
+            )}
           </>
         )}
       </main>

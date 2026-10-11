@@ -12,6 +12,23 @@ export interface Stop {
   phone: string;
   notes: string;
   status: string;
+  driver?: string;
+  route?: string;
+}
+
+export type AppMode = 'slicer' | 'cage_verifier';
+
+export interface CageScanResult {
+  id: string;
+  barcode: string;
+  timestamp: Date;
+  isMatch: boolean;
+  route?: string;
+  driver?: string;
+  zip?: string;
+  address?: string;
+  seq?: number;
+  recipient?: string;
 }
 
 export type ExportPreset = 'circuit' | 'roadwarrior' | 'route4me' | 'groundcloud';
@@ -29,3 +46,4 @@ export interface ManifestMetadata {
   formattedDate: string | null;
   sourceType: 'file' | 'clipboard';
 }
+

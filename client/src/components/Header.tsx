@@ -1,6 +1,6 @@
 import React from 'react';
-import { MapPin, RotateCcw, LogOut, CheckCircle, Package, FileSpreadsheet, Clock } from 'lucide-react';
-import type { ManifestMetadata } from '../types';
+import { MapPin, RotateCcw, LogOut, Package, FileSpreadsheet, Clock, ScanBarcode } from 'lucide-react';
+import type { ManifestMetadata, AppMode } from '../types';
 
 interface HeaderProps {
   totalCount: number;
@@ -8,34 +8,110 @@ interface HeaderProps {
   onReset: () => void;
   user?: { firstName?: string; username?: string };
   manifestMeta?: ManifestMetadata | null;
+  activeMode: AppMode;
+  onModeChange: (mode: AppMode) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ totalCount, filteredCount, onReset, user, manifestMeta }) => {
+export const Header: React.FC<HeaderProps> = ({
+  totalCount,
+  filteredCount,
+  onReset,
+  user,
+  manifestMeta,
+  activeMode,
+  onModeChange
+}) => {
   return (
-    <header className="border-b border-slate-200 bg-white sticky top-0 z-30 px-4 sm:px-6 lg:px-8 py-3.5 shadow-xs">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-        {/* Brand */}
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-blue-600 grid place-items-center text-white shadow-sm shadow-blue-500/25 shrink-0">
-            <MapPin className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-bold text-base sm:text-lg tracking-tight text-slate-900">Routing Assistant</h1>
-              <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                Ops Utility
-              </span>
+    <header className="border-b border-slate-200 bg-white sticky top-0 z-30 px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 shadow-xs">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
+        {/* Brand section */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-blue-600 grid place-items-center text-white shadow-sm shadow-blue-500/25 shrink-0">
+              <MapPin className="h-4.5 w-4.5" />
             </div>
-            <p className="text-xs text-slate-500 font-medium">ACED Division · SpeedX & Logistics Engine</p>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h1 className="font-bold text-sm sm:text-base tracking-tight text-slate-900 leading-tight">
+                  Routing Assistant
+                </h1>
+                <span className="text-[10px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                  Ops
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-medium hidden sm:block">
+                ACED Division · SpeedX & Logistics Engine
+              </p>
+            </div>
+          </div>
+
+          {/* Mobile User Logout */}
+          <div className="flex sm:hidden items-center gap-1.5">
+            {totalCount > 0 && (
+              <button
+                onClick={onReset}
+                className="p-1.5 text-slate-500 hover:text-slate-800 bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                title="Start Afresh"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <a
+              href="/logout"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="h-4 w-4" />
+            </a>
           </div>
         </div>
 
-        {/* Status Counters & Actions */}
-        <div className="flex items-center gap-3">
+        {/* Center Mode Switcher Tabs */}
+        <div className="flex items-center justify-center">
+          <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 w-full sm:w-auto shadow-2xs">
+            <button
+              type="button"
+              onClick={() => onModeChange('slicer')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeMode === 'slicer'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              <span>Route Slicer</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onModeChange('cage_verifier')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeMode === 'cage_verifier'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ScanBarcode className="h-3.5 w-3.5" />
+              <span>Cage Verifier</span>
+              <span
+                className={`text-[9px] px-1 py-0.2 rounded font-black uppercase ${
+                  activeMode === 'cage_verifier'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-blue-100 text-blue-700'
+                }`}
+              >
+                Scan
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Status Counters & Actions (Desktop / Tablet) */}
+        <div className="hidden sm:flex items-center gap-2.5">
           {manifestMeta && manifestMeta.rawFilename && (
             <div className="hidden lg:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-700">
-              <FileSpreadsheet className="h-4 w-4 text-blue-600 shrink-0" />
-              <span className="font-mono text-slate-800 max-w-[170px] truncate" title={manifestMeta.rawFilename}>
+              <FileSpreadsheet className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+              <span className="font-mono text-slate-800 max-w-[150px] truncate" title={manifestMeta.rawFilename}>
                 {manifestMeta.rawFilename}
               </span>
               {manifestMeta.formattedDate ? (
@@ -48,11 +124,15 @@ export const Header: React.FC<HeaderProps> = ({ totalCount, filteredCount, onRes
           )}
 
           {totalCount > 0 && (
-            <div className="hidden sm:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-700">
-              <Package className="h-4 w-4 text-slate-400" />
-              <span>{totalCount} total</span>
-              <span className="text-slate-300">/</span>
-              <span className="text-blue-600 font-bold">{filteredCount} selected</span>
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-700">
+              <Package className="h-3.5 w-3.5 text-slate-400" />
+              <span>{totalCount} pkgs</span>
+              {activeMode === 'slicer' && (
+                <>
+                  <span className="text-slate-300">/</span>
+                  <span className="text-blue-600 font-bold">{filteredCount} sel</span>
+                </>
+              )}
             </div>
           )}
 
@@ -63,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({ totalCount, filteredCount, onRes
               title="Clear current stops and start over"
             >
               <RotateCcw className="h-3.5 w-3.5 text-slate-500" />
-              <span>Start Afresh</span>
+              <span>Reset</span>
             </button>
           )}
 
@@ -85,3 +165,4 @@ export const Header: React.FC<HeaderProps> = ({ totalCount, filteredCount, onRes
     </header>
   );
 };
+export default Header;
