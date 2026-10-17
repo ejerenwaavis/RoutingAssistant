@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, RotateCcw, LogOut, Package, FileSpreadsheet, Clock, ScanBarcode } from 'lucide-react';
+import { MapPin, RotateCcw, LogOut, Package, FileSpreadsheet, Clock, ScanBarcode, ArrowDownUp } from 'lucide-react';
 import type { ManifestMetadata, AppMode } from '../types';
 
 interface HeaderProps {
@@ -71,15 +71,15 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* ROW 2 (Mobile) / CENTER (Desktop): Mode Switcher Tabs */}
+        {/* ROW 2 (Mobile) / CENTER (Desktop): 3-Mode Switcher Tabs */}
         <div className="flex items-center justify-center">
           <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 w-full sm:w-auto shadow-2xs">
             <button
               type="button"
               onClick={() => onModeChange('slicer')}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeMode === 'slicer'
-                  ? 'bg-white text-blue-700 shadow-xs'
+                  ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -89,8 +89,30 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               type="button"
+              onClick={() => onModeChange('sorter')}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeMode === 'sorter'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ArrowDownUp className="h-3.5 w-3.5" />
+              <span>Package Sorter</span>
+              <span
+                className={`text-[9px] px-1 py-0.2 rounded font-black uppercase ${
+                  activeMode === 'sorter'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-emerald-100 text-emerald-800'
+                }`}
+              >
+                Sort
+              </span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => onModeChange('cage_verifier')}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeMode === 'cage_verifier'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'

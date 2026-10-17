@@ -16,7 +16,7 @@ export interface Stop {
   route?: string;
 }
 
-export type AppMode = 'slicer' | 'cage_verifier';
+export type AppMode = 'slicer' | 'sorter' | 'cage_verifier';
 
 export interface CageScanResult {
   id: string;
@@ -30,6 +30,20 @@ export interface CageScanResult {
   seq?: number | null;
   recipient?: string;
 }
+
+export interface PackageSortResult {
+  id: string;
+  barcode: string;
+  timestamp: Date;
+  isFound: boolean;
+  route: string;
+  driver: string;
+  seq: number | null;
+  zip: string;
+  address: string;
+  recipient: string;
+}
+
 
 export type ExportPreset = 'circuit' | 'roadwarrior' | 'route4me' | 'groundcloud';
 

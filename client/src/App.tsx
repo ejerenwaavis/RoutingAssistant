@@ -5,6 +5,7 @@ import { Step2ZipSlicer } from './components/Step2ZipSlicer';
 import { Step3Export } from './components/Step3Export';
 import { StopsTable } from './components/StopsTable';
 import { CageVerifier } from './components/CageVerifier';
+import { PackageSorter } from './components/PackageSorter';
 import { extractTimestampFromFilename } from './lib/filenameHelper';
 import { isDeliveredStatus, getDefaultSelectedStatuses } from './lib/parser';
 import type { Stop, UserProfile, ManifestMetadata, AppMode } from './types';
@@ -190,7 +191,41 @@ export function App() {
           </>
         )}
 
-        {/* MODE 2: CAGE / GAYLORD VERIFIER */}
+        {/* MODE 2: PACKAGE SORTER */}
+        {activeMode === 'sorter' && (
+          <>
+            {stops.length === 0 ? (
+              <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 text-center flex flex-col items-center gap-2">
+                  <div className="h-10 w-10 rounded-xl bg-emerald-600 text-white grid place-items-center shadow-xs">
+                    <ScanBarcode className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-bold text-slate-900 text-base">Manifest Required for Package Sorting</h3>
+                  <p className="text-xs text-slate-600 max-w-md">
+                    Please upload or smart-paste your manifest file (.xlsx / .csv). Package Sorter will index routes, drivers, and sequences so you can sort packages into their dedicated bins in real-time.
+                  </p>
+                </div>
+
+                <Step1Ingest
+                  onStopsLoaded={handleStopsLoaded}
+                  isLoading={isLoading}
+                  setIsLoading={setIsLoading}
+                  hasData={false}
+                  manifestMeta={null}
+                />
+              </div>
+            ) : (
+              <PackageSorter
+                stops={stops}
+                manifestMeta={manifestMeta}
+                user={user}
+                onSwitchToSlicer={() => setActiveMode('slicer')}
+              />
+            )}
+          </>
+        )}
+
+        {/* MODE 3: CAGE / GAYLORD VERIFIER */}
         {activeMode === 'cage_verifier' && (
           <>
             {stops.length === 0 ? (

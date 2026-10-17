@@ -5,3 +5,23 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
 }
+
+/* Compact Camera Viewfinder Styling */
+#cage-camera-viewfinder video,
+#sorter-camera-viewfinder video {
+  object-fit: cover !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0.75rem !important;
+}
+
+#cage-camera-viewfinder,
+#sorter-camera-viewfinder {
+  overflow: hidden !important;
+  border-radius: 0.75rem !important;
+}
+
+#cage-camera-viewfinder img,
+#sorter-camera-viewfinder img {
+  display: none !important;
+}
