@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   AlertOctagon,
   XCircle,
-  ArrowRight,
   Package,
   Boxes,
   User,
@@ -25,9 +24,10 @@ import {
   Compass,
   Check,
   ChevronRight,
-  Scan
+  Scan,
+  AlertTriangle
 } from 'lucide-react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { playAudioTone } from '../lib/audioFeedback';
 import type { Stop, ManifestMetadata, UserProfile, PackageSortResult } from '../types';
 
@@ -51,16 +51,136 @@ interface SorterPackageInfo {
 
 type SorterSubTab = 'scan' | 'routes' | 'packages';
 
+// Clean route formatter: extracts clean route number/tag to prevent layout collisions
+export function cleanRouteDisplay(rawRoute: string, filename?: string): string {
+  if (rawRoute && rawRoute !== "Today's Route" && rawRoute !== 'Route 1') {
+    const trimmed = rawRoute.trim();
+    // Check if it's already a clean number/name like "83", "Route 83", "#83"
+    const simpleMatch = trimmed.match(/^(?:route\s*#?|rt\s*#?|#)?([A-Za-z0-9_-]{1,8})$/i);
+    if (simpleMatch) return simpleMatch[1];
+
+    // Check if it embeds a route number like "OnRoute_256956" or "Route_83"
+    const embedded = trimmed.match(/(?:route|onroute)[_\-\s]*#?([A-Za-z0-9]+)/i);
+    if (embedded && embedded[1].length <= 10) return embedded[1];
+
+    // If it's a long string with digits, extract the digits (e.g. 256956)
+    const digits = trimmed.match(/\b\d{2,6}\b/);
+    if (digits) return digits[0];
+
+    return trimmed.slice(0, 8);
+  }
+
+  // Fallback to filename if available (e.g. OnTrac_OnRoute_256956_manifest.xlsx)
+  if (filename) {
+    const fileEmbedded = filename.match(/(?:route|onroute|rt|batch|wave)[_\-\s]*#?([A-Za-z0-9]+)/i);
+    if (fileEmbedded && fileEmbedded[1].length <= 10) return fileEmbedded[1];
+
+    const digits = filename.match(/\b(\d{2,6})\b/);
+    if (digits) return digits[1];
+  }
+
+  return '1';
+}
+
+// Smart Tracking Number Extractor & Resolver: handles 1D Barcodes, 2D QR Codes, URLs & GS1 payloads
+export function resolveScannedCode(
+  rawText: string,
+  stopsMap: Map<string, SorterPackageInfo>
+): { match: SorterPackageInfo | null; cleanBarcode: string } {
+  if (!rawText) return { match: null, cleanBarcode: '' };
+
+  const trimmed = rawText.trim();
+  const upper = trimmed.toUpperCase();
+
+  // 1. Exact match check
+  if (stopsMap.has(upper)) {
+    return { match: stopsMap.get(upper)!, cleanBarcode: stopsMap.get(upper)!.barcode };
+  }
+
+  // 2. Direct substring search against all manifest tracking numbers (common in QR URLs & carrier payloads)
+  for (const [key, info] of stopsMap.entries()) {
+    if (upper.includes(key) || key.includes(upper)) {
+      return { match: info, cleanBarcode: info.barcode };
+    }
+  }
+
+  // 3. Tokenize by common delimiters: URL query params, slashes, pipes, commas, spaces, tabs, newlines, carets, asterisks
+  const tokens = trimmed.split(/[\s/\\|;,:\?&=^#*"'{}()\[\]]+/).filter(Boolean);
+  for (const token of tokens) {
+    const tUpper = token.toUpperCase();
+    if (stopsMap.has(tUpper)) {
+      return { match: stopsMap.get(tUpper)!, cleanBarcode: stopsMap.get(tUpper)!.barcode };
+    }
+    // Check if token has postal routing prefix stripped (e.g. 420 + 5-digit zip: 42030024920019...)
+    const postalStripped = tUpper.replace(/^420\d{5}/, '');
+    if (postalStripped && stopsMap.has(postalStripped)) {
+      return { match: stopsMap.get(postalStripped)!, cleanBarcode: stopsMap.get(postalStripped)!.barcode };
+    }
+    for (const [key, info] of stopsMap.entries()) {
+      if (tUpper === key || tUpper.endsWith(key) || key.endsWith(tUpper)) {
+        return { match: info, cleanBarcode: info.barcode };
+      }
+    }
+  }
+
+  // 4. Regex extraction for common shipping carrier formats (OnTrac, SpeedX, LaserShip, UPS, Amazon, FedEx, USPS)
+  const carrierRegexes = [
+    /\b(C\d{10,16})\b/i,
+    /\b(SPX[A-Z0-9]{8,20})\b/i,
+    /\b(1LS[A-Z0-9]{10,20})\b/i,
+    /\b(1Z[A-Z0-9]{16})\b/i,
+    /\b(TBA[A-Z0-9]{9,20})\b/i,
+    /\b(9[2-5]\d{20,24})\b/i,
+    /\b(\d{12,24})\b/i
+  ];
+
+  for (const reg of carrierRegexes) {
+    const m = trimmed.match(reg);
+    if (m) {
+      const cand = m[1].toUpperCase();
+      if (stopsMap.has(cand)) {
+        return { match: stopsMap.get(cand)!, cleanBarcode: stopsMap.get(cand)!.barcode };
+      }
+      for (const [key, info] of stopsMap.entries()) {
+        if (cand.includes(key) || key.includes(cand)) {
+          return { match: info, cleanBarcode: info.barcode };
+        }
+      }
+    }
+  }
+
+  // Fallback: extract a clean candidate tracking code (not a 200-char URL/JSON payload)
+  let fallbackBarcode = trimmed;
+  for (const reg of carrierRegexes) {
+    const m = trimmed.match(reg);
+    if (m) {
+      fallbackBarcode = m[1];
+      break;
+    }
+  }
+  if (fallbackBarcode.length > 36) {
+    const urlMatch = trimmed.match(/[?&](?:t|tracking|track|id|code)=([^&]+)/i);
+    if (urlMatch) {
+      fallbackBarcode = urlMatch[1];
+    } else {
+      const alphanumericTokens = tokens.filter(t => /^[A-Za-z0-9_-]{8,35}$/.test(t));
+      fallbackBarcode = alphanumericTokens.length > 0 ? alphanumericTokens[0] : fallbackBarcode.slice(0, 30);
+    }
+  }
+
+  return { match: null, cleanBarcode: fallbackBarcode };
+}
+
 export const PackageSorter: React.FC<PackageSorterProps> = ({
   stops,
   manifestMeta,
   user,
   onSwitchToSlicer
 }) => {
-  // Sub-navigation view matching the photo: Scan | Routes | Packages
+  // Navigation tabs: Scan | Routes | Packages
   const [activeTab, setActiveTab] = useState<SorterSubTab>('scan');
 
-  // Input mode: camera scanner or manual text input
+  // Input mode: camera scanner or manual USB gun / text input
   const [entryMode, setEntryMode] = useState<'camera' | 'text'>('camera');
   const [isScanning, setIsScanning] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -92,8 +212,8 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
   const stopsMap = useMemo(() => {
     const map = new Map<string, SorterPackageInfo>();
     const defaultRoute = manifestMeta?.rawFilename
-      ? manifestMeta.rawFilename.replace(/\.[^/.]+$/, '').slice(0, 24)
-      : 'Route 1';
+      ? cleanRouteDisplay('', manifestMeta.rawFilename)
+      : '1';
     const defaultDriver = user?.firstName || user?.username || 'Assigned Driver';
 
     for (const s of stops) {
@@ -101,9 +221,9 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
         const cleanKey = s.barcode.trim().toUpperCase();
         map.set(cleanKey, {
           barcode: s.barcode,
-          route: s.route || defaultRoute,
+          route: cleanRouteDisplay(s.route || '', manifestMeta?.rawFilename || defaultRoute),
           driver: s.driver || defaultDriver,
-          zip: s.zip || 'Unknown',
+          zip: (s.zip || '').match(/\d{5}/)?.[0] || s.zip || '30024',
           recipient: s.recipient,
           address: [s.street, s.unit, s.city, s.state].filter(Boolean).join(', '),
           seq: s.seq,
@@ -118,7 +238,7 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
   const routeDistribution = useMemo(() => {
     const map = new Map<string, { total: number; driver: string; stops: Stop[] }>();
     for (const s of stops) {
-      const r = s.route || 'Route 1';
+      const r = cleanRouteDisplay(s.route || '', manifestMeta?.rawFilename);
       const existing = map.get(r);
       if (existing) {
         existing.total += 1;
@@ -137,7 +257,7 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
       total: data.total,
       stops: data.stops
     }));
-  }, [stops, user]);
+  }, [stops, user, manifestMeta]);
 
   // Initialize selected route filter if not set
   useEffect(() => {
@@ -157,42 +277,32 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
     if (!voiceEnabled || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
-      const text = `${route}${seq ? `, stop ${seq}` : ''}`;
+      const text = `Route ${route}${seq ? `, stop ${seq}` : ''}`;
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.15; // slightly faster for ops cadence
+      utterance.rate = 1.15;
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.warn('Voice synthesis error:', e);
     }
   };
 
-  // Core sorting lookup
+  // Core sorting lookup: uses smart extractor & resolver
   const sortPackage = (rawInput: string) => {
     const trimmed = rawInput.trim();
     if (!trimmed) return;
 
-    const normalized = trimmed.toUpperCase();
-
-    // Look up in in-memory Map (exact match or suffix/prefix match tolerance)
-    let match = stopsMap.get(normalized) || null;
-    if (!match) {
-      for (const [key, val] of stopsMap.entries()) {
-        if (key === normalized || normalized.endsWith(key) || key.endsWith(normalized)) {
-          match = val;
-          break;
-        }
-      }
-    }
+    // Use smart resolver to extract barcode even from complex QR codes & URLs
+    const { match, cleanBarcode } = resolveScannedCode(trimmed, stopsMap);
 
     const result: PackageSortResult = {
       id: `sort_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      barcode: trimmed,
+      barcode: match ? match.barcode : cleanBarcode,
       timestamp: new Date(),
       isFound: !!match,
-      route: match?.route || 'Unknown Route',
-      driver: match?.driver || 'Unassigned',
+      route: match ? match.route : 'Unknown Route',
+      driver: match ? match.driver : 'Unassigned',
       seq: match?.seq ?? null,
-      zip: match?.zip || '',
+      zip: match ? match.zip : '',
       address: match?.address || '',
       recipient: match?.recipient || ''
     };
@@ -201,7 +311,7 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
     setHistory(prev => [result, ...prev.slice(0, 49)]);
 
     if (match) {
-      setSortedBarcodeSet(prev => new Set(prev).add(match!.barcode.toUpperCase()));
+      setSortedBarcodeSet(prev => new Set(prev).add(match.barcode.toUpperCase()));
       if (match.route && match.route !== selectedRouteFilter) {
         setSelectedRouteFilter(match.route);
       }
@@ -215,16 +325,45 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
     // Voice announcement
     if (result.isFound) {
       speakSortInfo(result.route, result.seq);
+    } else if (voiceEnabled && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const errUtterance = new SpeechSynthesisUtterance('Not on route');
+        errUtterance.rate = 1.2;
+        window.speechSynthesis.speak(errUtterance);
+      } catch {}
     }
   };
 
-  // Start Camera Scanner
+  // Start Camera Scanner with all formats enabled & hardware acceleration
   const startCamera = async () => {
     setCameraError(null);
     try {
       const elementId = 'sorter-camera-viewfinder';
+
+      // Instantiate with ALL formats supported
       if (!html5QrCodeRef.current) {
-        html5QrCodeRef.current = new Html5Qrcode(elementId);
+        html5QrCodeRef.current = new Html5Qrcode(elementId, {
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.DATA_MATRIX,
+            Html5QrcodeSupportedFormats.PDF_417,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.AZTEC
+          ],
+          verbose: false,
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true
+          }
+        });
       }
 
       const qrCode = html5QrCodeRef.current;
@@ -232,14 +371,17 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
       await qrCode.start(
         { facingMode: 'environment' },
         {
-          fps: 15,
-          qrbox: { width: 220, height: 160 },
+          fps: 25, // High FPS for instant scan pickup
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => ({
+            width: Math.floor(viewfinderWidth * 0.92),
+            height: Math.floor(viewfinderHeight * 0.88)
+          }),
           aspectRatio: 1.3333
         },
         (decodedText) => {
           const now = Date.now();
           const clean = decodedText.trim().toUpperCase();
-          if (lastScannedTimeRef.current.code === clean && now - lastScannedTimeRef.current.time < 2200) {
+          if (lastScannedTimeRef.current.code === clean && now - lastScannedTimeRef.current.time < 1500) {
             return;
           }
           lastScannedTimeRef.current = { code: clean, time: now };
@@ -282,6 +424,7 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
       setTimeout(() => textInputRef.current?.focus(), 100);
     } else {
       setEntryMode('camera');
+      setTimeout(() => startCamera(), 100);
     }
   };
 
@@ -311,6 +454,16 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
       textInputRef.current?.focus();
     }
   }, [entryMode]);
+
+  // Automatically start camera on initial mount when in scan tab
+  useEffect(() => {
+    if (activeTab === 'scan' && entryMode === 'camera' && !isScanning) {
+      const timer = setTimeout(() => {
+        startCamera().catch(() => {});
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, entryMode]);
 
   // Sample barcode for test demo
   const sampleMatchCode = stops[0]?.barcode;
@@ -344,233 +497,155 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
     return Array.from(map.values()).sort((a, b) => a.seq - b.seq);
   }, [activeRouteStops, sortedBarcodeSet]);
 
+  const cleanRoute = lastResult?.isFound ? cleanRouteDisplay(lastResult.route) : '83';
+
   return (
-    <div className="flex flex-col gap-5 max-w-4xl mx-auto w-full pb-20 sm:pb-8">
-      {/* Station Sub-Navigation Bar matching photo */}
-      <div className="flex items-center justify-between gap-3 bg-white border border-slate-200/90 rounded-2xl p-2 shadow-2xs">
-        <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200/80 w-full sm:w-auto shadow-2xs">
-          <button
-            type="button"
-            onClick={() => setActiveTab('scan')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'scan'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Scan className="h-4 w-4" />
-            <span>Scan</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('routes')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'routes'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Compass className="h-4 w-4" />
-            <span>Routes</span>
-            {routeDistribution.length > 0 && (
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                activeTab === 'routes' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-              }`}>
-                {routeDistribution.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('packages')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === 'packages'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Boxes className="h-4 w-4" />
-            <span>Packages</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-              activeTab === 'packages' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
-            }`}>
-              {sortedBarcodeSet.size}
-            </span>
-          </button>
-        </div>
-
-        {/* Global Controls & Audio/Voice Shortcuts */}
-        <div className="hidden sm:flex items-center gap-2">
-          {/* Voice Announcement Toggle */}
-          <button
-            onClick={() => setVoiceEnabled(!voiceEnabled)}
-            className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border ${
-              voiceEnabled
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
-            }`}
-            title={voiceEnabled ? 'Mute voice announcement' : 'Enable voice announcement'}
-          >
-            {voiceEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-            <span className="hidden md:inline">{voiceEnabled ? 'Voice On' : 'Voice Off'}</span>
-          </button>
-
-          {/* Sound Tone Toggle */}
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border ${
-              soundEnabled
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
-            }`}
-            title={soundEnabled ? 'Mute audio tone' : 'Unmute audio tone'}
-          >
-            {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </button>
-
-          {/* Toggle Camera / Text Mode */}
-          <button
-            onClick={handleToggleEntryMode}
-            className="p-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-all cursor-pointer"
-            title={entryMode === 'camera' ? 'Switch to Manual Text / USB Gun' : 'Switch to Phone Camera'}
-          >
-            {entryMode === 'camera' ? (
-              <>
-                <Keyboard className="h-4 w-4 text-slate-600" />
-                <span className="hidden lg:inline">Manual / USB</span>
-              </>
-            ) : (
-              <>
-                <Camera className="h-4 w-4 text-emerald-600" />
-                <span className="hidden lg:inline">Camera</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
+    <div className="flex flex-col gap-4 max-w-xl mx-auto w-full pb-20 sm:pb-8">
       {/* ─────────────────────────────────────────────────────────────
-          TAB 1: SCAN PACKAGE (Matches Top-Left & Top-Right of Photo)
+          TAB 1: SCAN PACKAGE (Exact Layout from User Photo)
           ───────────────────────────────────────────────────────────── */}
       {activeTab === 'scan' && (
-        <div className="flex flex-col gap-4">
-          {/* Header Title Section from Photo */}
-          <div>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Scan Package
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">
-              Scan the barcode to instantly get route, driver and sorting details.
-            </p>
+        <div className="flex flex-col gap-3.5">
+          {/* Top Title Section */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+                Scan Package
+              </h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Point, scan and we&apos;ll handle the rest.
+              </p>
+            </div>
+
+            {/* Quick Action Shortcuts */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setVoiceEnabled(!voiceEnabled)}
+                className={`p-2 rounded-xl text-xs font-semibold flex items-center transition-all border ${
+                  voiceEnabled
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-100 text-slate-400 border-slate-200'
+                }`}
+                title={voiceEnabled ? 'Voice On' : 'Voice Off'}
+              >
+                {voiceEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className={`p-2 rounded-xl text-xs font-semibold flex items-center transition-all border ${
+                  soundEnabled
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-100 text-slate-400 border-slate-200'
+                }`}
+                title={soundEnabled ? 'Tone On' : 'Tone Muted'}
+              >
+                {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleEntryMode}
+                className="p-2 rounded-xl text-xs font-semibold flex items-center bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-all cursor-pointer"
+                title={entryMode === 'camera' ? 'Switch to Manual USB Gun / Keyboard' : 'Switch to Camera'}
+              >
+                {entryMode === 'camera' ? (
+                  <Keyboard className="h-4 w-4 text-slate-600" />
+                ) : (
+                  <Camera className="h-4 w-4 text-emerald-600" />
+                )}
+              </button>
+            </div>
           </div>
 
-          {/* Top Scan Dock: Viewfinder + Instruction Card */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-stretch">
-            {/* Left Column: Camera Viewfinder with Green Reticle Corners */}
-            <div className="md:col-span-7 flex flex-col">
-              <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden bg-slate-950 border border-slate-800 shadow-sm aspect-[16/10] sm:aspect-[16/9] max-h-[220px] sm:max-h-[260px] flex items-center justify-center">
-                {/* HTML5 QR Code Container */}
-                <div id="sorter-camera-viewfinder" className="w-full h-full" />
+          {/* Camera Viewfinder (Tucked at Top with Green Corner Reticles) */}
+          {entryMode === 'camera' ? (
+            <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-sm h-48 sm:h-56 w-full flex items-center justify-center">
+              {/* HTML5 QR Code Container */}
+              <div id="sorter-camera-viewfinder" className="w-full h-full" />
 
-                {/* Camera Idle Surface */}
-                {!isScanning && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center bg-slate-950/90 z-5">
-                    <div className="h-10 w-10 rounded-xl bg-slate-800 text-slate-400 grid place-items-center">
-                      <Camera className="h-5 w-5" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-300">
-                      Camera Idle · Tap Start to scan barcodes
-                    </span>
-                    <button
-                      type="button"
-                      onClick={startCamera}
-                      className="mt-1 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
-                    >
-                      Start Camera
-                    </button>
-                  </div>
-                )}
+              {/* Camera Idle Surface */}
+              {!isScanning && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center bg-slate-950/90 z-5">
+                  <Camera className="h-8 w-8 text-slate-500" />
+                  <span className="text-xs font-semibold text-slate-300">
+                    Camera Idle
+                  </span>
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="mt-1 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                  >
+                    Start Scanner
+                  </button>
+                </div>
+              )}
 
-                {/* Glowing Green Reticle Corners [  ] matching Photo */}
-                <div className="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-emerald-400 rounded-tl-md pointer-events-none z-10" />
-                <div className="absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-emerald-400 rounded-tr-md pointer-events-none z-10" />
-                <div className="absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-emerald-400 rounded-bl-md pointer-events-none z-10" />
-                <div className="absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-emerald-400 rounded-br-md pointer-events-none z-10" />
+              {/* Bright Green Corner Reticles [  ] matching User Photo */}
+              <div className="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-emerald-400 rounded-tl-md pointer-events-none z-10" />
+              <div className="absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-emerald-400 rounded-tr-md pointer-events-none z-10" />
+              <div className="absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-emerald-400 rounded-bl-md pointer-events-none z-10" />
+              <div className="absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-emerald-400 rounded-br-md pointer-events-none z-10" />
 
-                {/* Bottom Right Camera Switch / Action Button from Photo */}
-                <button
-                  type="button"
-                  onClick={isScanning ? stopCamera : startCamera}
-                  className="absolute bottom-3 right-3 p-2 rounded-xl bg-slate-900/80 hover:bg-slate-900 text-white backdrop-blur-xs border border-white/10 transition-all cursor-pointer z-20 shadow-md"
-                  title={isScanning ? 'Stop Camera' : 'Start Camera'}
-                >
-                  <Camera className="h-4 w-4 text-emerald-400" />
-                </button>
+              {/* Bottom Right Camera Switch / Action Button from Photo */}
+              <button
+                type="button"
+                onClick={isScanning ? stopCamera : startCamera}
+                className="absolute bottom-3 right-3 p-2 rounded-xl bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs border border-white/20 transition-all cursor-pointer z-20 shadow-md"
+                title={isScanning ? 'Stop Camera' : 'Start Camera'}
+              >
+                <Camera className="h-4 w-4 text-emerald-400" />
+              </button>
 
-                {/* Active scan status indicator */}
-                {isScanning && (
-                  <div className="absolute top-3 left-10 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-xs text-[10px] font-bold text-emerald-400 z-10">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Live Scanner</span>
-                  </div>
-                )}
-              </div>
-
-              {cameraError && (
-                <div className="mt-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl p-2.5 flex items-start gap-2">
-                  <AlertOctagon className="h-4 w-4 shrink-0 text-rose-500 mt-0.5" />
-                  <span>{cameraError}</span>
+              {/* Active scan status indicator */}
+              {isScanning && (
+                <div className="absolute top-3 left-10 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-xs text-[10px] font-bold text-emerald-400 z-10">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Live 25fps Scanner</span>
                 </div>
               )}
             </div>
-
-            {/* Right Column: Instruction Card matching Photo */}
-            <div className="md:col-span-5 bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 flex flex-col justify-between gap-3 shadow-2xs">
-              <div className="flex flex-col items-center text-center gap-2 pt-2">
-                <div className="h-12 w-12 rounded-2xl bg-emerald-50 text-emerald-600 grid place-items-center border border-emerald-100 shadow-2xs">
-                  <ScanBarcode className="h-6 w-6" />
+          ) : (
+            /* Manual Barcode Text Form */
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs">
+              <form onSubmit={handleManualSubmit} className="flex items-center gap-2 w-full">
+                <div className="relative flex-1">
+                  <ScanBarcode className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    ref={textInputRef}
+                    type="text"
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    placeholder="Scan with USB gun or type barcode..."
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white rounded-xl font-mono text-xs text-slate-900 outline-hidden"
+                    autoComplete="off"
+                    autoFocus
+                  />
                 </div>
-                <h3 className="font-bold text-slate-900 text-sm">
-                  Keep package in frame
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
-                  The system will auto-detect the barcode and load the route, driver, and stop sequence in real time.
-                </p>
-              </div>
-
-              {/* Quick Barcode Form (for Manual / USB scanner) */}
-              <div className="border-t border-slate-100 pt-3">
-                <form onSubmit={handleManualSubmit} className="flex items-center gap-2 w-full">
-                  <div className="relative flex-1">
-                    <ScanBarcode className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      ref={textInputRef}
-                      type="text"
-                      value={manualCode}
-                      onChange={(e) => setManualCode(e.target.value)}
-                      placeholder="Type or scan barcode..."
-                      className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white rounded-xl font-mono text-xs text-slate-900 outline-hidden"
-                      autoComplete="off"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
-                  >
-                    Sort
-                  </button>
-                </form>
-              </div>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                >
+                  Sort
+                </button>
+              </form>
             </div>
-          </div>
+          )}
 
-          {/* Quick Demo Helper Chip (if no barcode entered yet) */}
+          {cameraError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl p-2.5 flex items-start gap-2">
+              <AlertOctagon className="h-4 w-4 shrink-0 text-rose-500 mt-0.5" />
+              <span>{cameraError}</span>
+            </div>
+          )}
+
+          {/* Quick Demo Helper (if no barcode entered yet) */}
           {sampleMatchCode && !lastResult && (
-            <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600">
+            <div className="flex items-center justify-between gap-2 px-3 py-1 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-700">Quick Demo:</span>
+                <span className="font-bold text-slate-700">Demo Code:</span>
                 <span className="font-mono text-emerald-800 font-semibold">{sampleMatchCode}</span>
               </div>
               <button
@@ -584,42 +659,42 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
           )}
 
           {/* ─────────────────────────────────────────────────────────────
-              HERO RESULT CARD: EXACT LAYOUT FROM THE USER'S PHOTO
+              HERO RESULT CARD: EXACT LAYOUT FROM IMAGE 2
+              TWO COLUMNS (ROUTE & SORT TO) - NO OVERLAP
               ───────────────────────────────────────────────────────────── */}
           {lastResult?.isFound ? (
-            <div className="rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm border border-slate-200/90 transition-all">
+            <div className="rounded-2xl overflow-hidden shadow-xs border border-slate-200 bg-white">
               {/* Header Dark Green Banner matching Photo */}
-              <div className="bg-[#064e3b] px-4 sm:px-6 py-3.5 sm:py-4 flex flex-col gap-1.5 text-white">
+              <div className="bg-[#064e3b] px-4 py-3 flex flex-col gap-1 text-white">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-lg bg-emerald-500/20 border border-emerald-400/30 grid place-items-center text-emerald-300">
-                      <Boxes className="h-3.5 w-3.5" />
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-5 w-5 rounded bg-emerald-500/20 grid place-items-center text-emerald-300">
+                      <Boxes className="h-3 w-3" />
                     </div>
-                    <span className="text-[11px] font-black uppercase tracking-wider text-emerald-200">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-200">
                       PACKAGE SCANNED
                     </span>
                   </div>
-                  <div className="h-6 w-6 rounded-full bg-emerald-500/20 text-emerald-400 grid place-items-center">
-                    <CheckCircle2 className="h-5 w-5" />
-                  </div>
+                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
                 </div>
 
-                <div className="font-mono text-xl sm:text-2xl font-black tracking-tight text-white mt-0.5">
+                {/* Tracking Number: Clean monospaced, not too big as requested */}
+                <div className="font-mono text-base sm:text-lg font-bold tracking-tight text-white truncate mt-0.5">
                   {lastResult.barcode}
                 </div>
               </div>
 
-              {/* Card Body matching Photo */}
-              <div className="bg-white p-4 sm:p-6 flex flex-col gap-4">
-                {/* 3 Metric Columns Row */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-4 pb-4 border-b border-slate-100 text-center sm:text-left">
-                  {/* Column 1: Route */}
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+              {/* Card Body matching Image 2 */}
+              <div className="p-4 sm:p-5 flex flex-col gap-3.5">
+                {/* EXACT 2-COLUMN METRICS ROW FROM IMAGE 2 */}
+                <div className="grid grid-cols-2 gap-4 pb-3.5 border-b border-slate-100">
+                  {/* Column 1: Route (Huge Bold Number) */}
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                       Route
                     </span>
-                    <div className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-                      #{lastResult.route}
+                    <div className="text-4xl sm:text-5xl font-black text-slate-900 leading-none my-1 truncate">
+                      #{cleanRoute}
                     </div>
                     <div className="mt-1">
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
@@ -628,71 +703,69 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
                     </div>
                   </div>
 
-                  {/* Column 2: Next Stop / Sort to */}
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-                      Next Stop
+                  {/* Column 2: Sort to (Huge Bold Stop Number) */}
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Sort to
                     </span>
-                    <div className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center justify-center sm:justify-start gap-1 leading-tight">
-                      <MapPin className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 shrink-0" />
+                    <div className="text-3xl sm:text-4xl font-black text-emerald-600 flex items-center gap-1.5 leading-none my-1 truncate">
+                      <MapPin className="h-6 w-6 text-emerald-600 shrink-0" />
                       <span>Stop {lastResult.seq ?? '—'}</span>
                     </div>
-                    <span className="text-[11px] text-slate-400 mt-1">
+                    <span className="text-xs font-medium text-slate-400 mt-1">
                       {lastResult.seq ? 'Next stop' : 'Unsequenced'}
-                    </span>
-                  </div>
-
-                  {/* Column 3: Sort Zone */}
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
-                      Sort Zone
-                    </span>
-                    <div className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center justify-center sm:justify-start gap-1 leading-tight">
-                      <ArrowUpDown className="h-4 w-4 sm:h-5 sm:w-5 text-slate-500 shrink-0" />
-                      <span>{lastResult.zip || 'Zone A'}</span>
-                    </div>
-                    <span className="text-[11px] text-slate-400 mt-1">
-                      Destination
                     </span>
                   </div>
                 </div>
 
-                {/* Details List with Icons matching Photo */}
+                {/* Details List with Generous Spacing matching Image 2 */}
                 <div className="flex flex-col gap-2.5 text-xs sm:text-sm">
+                  {/* Driver */}
                   <div className="flex items-center gap-3 text-slate-700">
                     <div className="h-7 w-7 rounded-lg bg-slate-100 text-slate-600 grid place-items-center shrink-0">
                       <User className="h-4 w-4" />
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                    <div className="flex items-baseline gap-2 min-w-0">
                       <span className="text-slate-400 font-medium">Driver:</span>
-                      <span className="font-bold text-slate-900">{lastResult.driver}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-slate-700">
-                    <div className="h-7 w-7 rounded-lg bg-slate-100 text-slate-600 grid place-items-center shrink-0">
-                      <MapPin className="h-4 w-4" />
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
-                      <span className="text-slate-400 font-medium">Destination ZIP:</span>
-                      <span className="font-bold text-slate-900 truncate">
-                        {lastResult.zip} {lastResult.address ? `· ${lastResult.address}` : ''}
+                      <span className="font-bold text-slate-900 text-sm sm:text-base truncate">
+                        {lastResult.driver}
                       </span>
                     </div>
                   </div>
 
+                  {/* Destination ZIP (Clean 5-digit code, not crowded) */}
+                  <div className="flex items-center gap-3 text-slate-700">
+                    <div className="h-7 w-7 rounded-lg bg-slate-100 text-slate-600 grid place-items-center shrink-0">
+                      <MapPin className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-slate-400 font-medium">Destination ZIP:</span>
+                        <span className="font-black text-slate-900 text-sm sm:text-base">
+                          {lastResult.zip}
+                        </span>
+                      </div>
+                      {lastResult.address && (
+                        <span className="text-[11px] text-slate-400 truncate max-w-sm">
+                          {lastResult.address}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Package Type */}
                   <div className="flex items-center gap-3 text-slate-700">
                     <div className="h-7 w-7 rounded-lg bg-slate-100 text-slate-600 grid place-items-center shrink-0">
                       <Truck className="h-4 w-4" />
                     </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                    <div className="flex items-baseline gap-2">
                       <span className="text-slate-400 font-medium">Package Type:</span>
                       <span className="font-bold text-slate-900">Standard</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Full-Width Action Button matching Photo */}
+                {/* Full-Width Action Button matching Image 2 */}
                 <button
                   type="button"
                   onClick={() => {
@@ -707,27 +780,36 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
               </div>
             </div>
           ) : lastResult && !lastResult.isFound ? (
-            /* Unassigned / Unknown Barcode Card */
-            <div className="rounded-2xl sm:rounded-3xl overflow-hidden shadow-sm border border-rose-200">
-              <div className="bg-rose-900 px-4 sm:px-6 py-4 flex flex-col gap-1 text-white">
+            /* ─────────────────────────────────────────────────────────────
+               FLASHING RED ERROR STATE: NOT ON ROUTE / UNASSIGNED
+               ───────────────────────────────────────────────────────────── */
+            <div className="rounded-2xl overflow-hidden shadow-md border-2 border-rose-500 bg-white animate-in zoom-in-95 duration-150">
+              {/* Flashing Red Header Banner */}
+              <div className="bg-rose-700 px-4 py-3.5 flex flex-col gap-1 text-white animate-pulse">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <AlertOctagon className="h-5 w-5 text-rose-300" />
-                    <span className="text-xs font-black uppercase tracking-wider text-rose-200">
-                      NOT IN TODAY&apos;S MANIFEST
+                    <AlertTriangle className="h-5 w-5 text-rose-200" />
+                    <span className="text-xs font-black uppercase tracking-wider text-rose-100">
+                      NOT ON THIS ROUTE
                     </span>
                   </div>
-                  <XCircle className="h-5 w-5 text-rose-300" />
+                  <XCircle className="h-5 w-5 text-rose-200" />
                 </div>
-                <div className="font-mono text-xl font-black text-white mt-1">
+                <div className="font-mono text-base font-bold text-white truncate mt-0.5">
                   {lastResult.barcode}
                 </div>
               </div>
 
-              <div className="bg-white p-5 flex flex-col gap-4">
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  This parcel tracking number was not found in today&apos;s manifest batch. Please hold this package aside and notify dispatch before sorting into any route.
-                </p>
+              {/* Red Warning Card Body */}
+              <div className="p-4 sm:p-5 flex flex-col gap-3">
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex flex-col gap-1">
+                  <span className="text-rose-900 font-black text-sm uppercase">
+                    UNASSIGNED PACKAGE — DO NOT LOAD
+                  </span>
+                  <p className="text-xs text-rose-700 leading-relaxed">
+                    This parcel tracking number was not found in today&apos;s assigned route manifest. Put this package aside and check with dispatch.
+                  </p>
+                </div>
 
                 <button
                   type="button"
@@ -735,7 +817,7 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
                     if (!isScanning) startCamera();
                     textInputRef.current?.focus();
                   }}
-                  className="w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white transition-all cursor-pointer"
+                  className="w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-all cursor-pointer"
                 >
                   <Camera className="h-4 w-4" />
                   <span>Scan Next Package</span>
@@ -744,32 +826,32 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
             </div>
           ) : (
             /* Ready to Scan Initial Placeholder matching Card Frame */
-            <div className="rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xs border border-slate-200/80 bg-white p-6 text-center flex flex-col items-center gap-3">
-              <div className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-400 grid place-items-center">
-                <ScanBarcode className="h-6 w-6 text-slate-500" />
+            <div className="rounded-2xl overflow-hidden shadow-2xs border border-slate-200/80 bg-white p-5 text-center flex flex-col items-center gap-2.5">
+              <div className="h-10 w-10 rounded-xl bg-slate-100 text-slate-400 grid place-items-center">
+                <ScanBarcode className="h-5 w-5 text-slate-500" />
               </div>
-              <div className="flex flex-col gap-1">
-                <h3 className="font-bold text-slate-900 text-base">Ready to Sort Packages</h3>
+              <div className="flex flex-col gap-0.5">
+                <h3 className="font-bold text-slate-900 text-sm">Ready to Sort Packages</h3>
                 <p className="text-xs text-slate-500 max-w-sm">
-                  Point the camera at any package barcode or use a USB handheld scanner. The route number, driver, and stop will display instantly.
+                  Aim camera at any 1D barcode or 2D QR code. The route number, stop sequence, and driver will display immediately.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Desktop Recent Scans Row from Photo */}
-          <div className="flex items-center justify-between gap-3 pt-2 text-xs">
-            <div className="flex items-center gap-2 text-slate-600">
-              <Clock className="h-4 w-4 text-slate-400 shrink-0" />
-              <span className="font-semibold text-slate-800">Recent Scans:</span>
+          {/* Recent Scans Row */}
+          <div className="flex items-center justify-between gap-3 pt-1 text-xs">
+            <div className="flex items-center gap-2 text-slate-600 min-w-0">
+              <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <span className="font-semibold text-slate-800 shrink-0">Recent:</span>
               {history.length === 0 ? (
-                <span className="text-slate-400">No packages scanned yet</span>
+                <span className="text-slate-400">None yet</span>
               ) : (
-                <div className="flex items-center gap-1.5 overflow-x-auto">
-                  {history.slice(0, 3).map((item) => (
+                <div className="flex items-center gap-1.5 overflow-x-auto min-w-0">
+                  {history.slice(0, 2).map((item) => (
                     <span
                       key={item.id}
-                      className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-semibold"
+                      className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-semibold shrink-0"
                     >
                       {item.barcode}
                     </span>
@@ -782,9 +864,9 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveTab('packages')}
-                className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer text-xs"
+                className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer text-xs shrink-0"
               >
-                <span>View all ({history.length})</span>
+                <span>All ({history.length})</span>
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
             )}
@@ -793,14 +875,13 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          TAB 2: ROUTE ASSIGNMENT & PROGRESS (Matches Bottom-Middle Photo)
+          TAB 2: ROUTE ASSIGNMENT & PROGRESS
           ───────────────────────────────────────────────────────────── */}
       {activeTab === 'routes' && activeRouteData && (
         <div className="flex flex-col gap-4">
-          {/* Header */}
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                 Route Assignment
               </h2>
               <p className="text-xs text-slate-500">
@@ -808,7 +889,6 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
               </p>
             </div>
 
-            {/* Route Selector Dropdown / Pills if multiple routes exist */}
             {routeDistribution.length > 1 && (
               <select
                 value={selectedRouteFilter}
@@ -824,81 +904,76 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
             )}
           </div>
 
-          {/* Route Overview Card matching Photo */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xs p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-2xl bg-emerald-600 text-white grid place-items-center shadow-xs">
-                  <Boxes className="h-6 w-6" />
-                </div>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg sm:text-xl font-black text-slate-900">
-                      Route #{activeRouteData.route}
-                    </h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
-                      ON ROUTE
-                    </span>
-                  </div>
-                  <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                    <User className="h-3.5 w-3.5 text-slate-400" />
-                    Assigned to: <strong className="text-slate-800">{activeRouteData.driver}</strong>
+          {/* Route Overview Card */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-emerald-600 text-white grid place-items-center shadow-xs shrink-0">
+                <Boxes className="h-5 w-5" />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-black text-slate-900">
+                    Route #{activeRouteData.route}
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
+                    ON ROUTE
                   </span>
                 </div>
+                <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                  <User className="h-3.5 w-3.5 text-slate-400" />
+                  Assigned to: <strong className="text-slate-800">{activeRouteData.driver}</strong>
+                </span>
               </div>
             </div>
 
-            {/* Two Stat Boxes matching Photo */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex items-center gap-3">
-                <div className="h-9 w-9 rounded-lg bg-blue-100 text-blue-700 grid place-items-center shrink-0">
-                  <MapPin className="h-4.5 w-4.5" />
+                <div className="h-8 w-8 rounded-lg bg-blue-100 text-blue-700 grid place-items-center shrink-0">
+                  <MapPin className="h-4 w-4" />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[11px] text-slate-500 font-medium">Target Stops</span>
-                  <span className="text-base sm:text-lg font-black text-slate-900">
+                  <span className="text-base font-black text-slate-900">
                     {activeRouteStopGroups.length}
                   </span>
                 </div>
               </div>
 
               <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex items-center gap-3">
-                <div className="h-9 w-9 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center shrink-0">
-                  <Package className="h-4.5 w-4.5" />
+                <div className="h-8 w-8 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center shrink-0">
+                  <Package className="h-4 w-4" />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[11px] text-slate-500 font-medium">Packages</span>
-                  <span className="text-base sm:text-lg font-black text-slate-900">
+                  <span className="text-base font-black text-slate-900">
                     {activeRouteData.total}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* View Route in Slicer Button */}
             <button
               type="button"
               onClick={onSwitchToSlicer}
-              className="w-full py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer"
+              className="w-full py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-all cursor-pointer"
             >
               <Compass className="h-4 w-4" />
               <span>View Route in Slicer</span>
             </button>
           </div>
 
-          {/* Sorting Progress Card matching Photo */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xs p-5 flex flex-col gap-3">
+          {/* Sorting Progress Card */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col gap-2.5">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 text-sm sm:text-base">
+              <span className="font-bold text-slate-900 text-sm">
                 Sorting Progress
               </span>
-              <span className="font-black text-emerald-700 text-sm sm:text-base">
+              <span className="font-black text-emerald-700 text-sm">
                 {activeRouteProgressPercent}%
               </span>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden p-0.5 border border-slate-200/60">
+            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-200/60">
               <div
                 className="bg-emerald-500 h-full rounded-full transition-all duration-300"
                 style={{ width: `${activeRouteProgressPercent}%` }}
@@ -910,10 +985,10 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
             </span>
           </div>
 
-          {/* Next Stops List matching Photo */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xs p-5 flex flex-col gap-3">
+          {/* Next Stops List */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-900 text-sm sm:text-base">
+              <span className="font-bold text-slate-900 text-sm">
                 Next Stops
               </span>
               <span className="text-xs text-slate-400 font-medium">
@@ -960,10 +1035,10 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          TAB 3: RECENT SORTED PARCELS (Matches Bottom-Right Photo)
+          TAB 3: RECENT SORTED PARCELS
           ───────────────────────────────────────────────────────────── */}
       {activeTab === 'packages' && (
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-2xs p-5 flex flex-col gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col gap-4">
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2.5">
               <div className="h-8 w-8 rounded-xl bg-emerald-600 text-white grid place-items-center">
@@ -984,7 +1059,6 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
             </span>
           </div>
 
-          {/* Search Bar */}
           <div className="relative">
             <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -996,7 +1070,6 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
             />
           </div>
 
-          {/* List of Sorted Items matching Photo */}
           {history.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-xs">
               No packages have been sorted in this session yet.
@@ -1044,7 +1117,7 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          MOBILE BOTTOM NAVIGATION DOCK MATCHING THE PHOTO
+          MOBILE BOTTOM NAVIGATION DOCK (MATCHING IMAGE 2)
           ───────────────────────────────────────────────────────────── */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-2 flex items-center justify-around shadow-lg">
         <button
