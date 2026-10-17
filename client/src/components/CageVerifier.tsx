@@ -411,9 +411,12 @@ export const CageVerifier: React.FC<CageVerifierProps> = ({
                 )}
 
                 {isScanning && (
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="w-20 h-14 border border-white/60 rounded-md" />
-                  </div>
+                  <>
+                    <div className="absolute top-1.5 left-1.5 w-3.5 h-3.5 border-t-2 border-l-2 border-emerald-400 rounded-tl-xs pointer-events-none z-10" />
+                    <div className="absolute top-1.5 right-1.5 w-3.5 h-3.5 border-t-2 border-r-2 border-emerald-400 rounded-tr-xs pointer-events-none z-10" />
+                    <div className="absolute bottom-1.5 left-1.5 w-3.5 h-3.5 border-b-2 border-l-2 border-emerald-400 rounded-bl-xs pointer-events-none z-10" />
+                    <div className="absolute bottom-1.5 right-1.5 w-3.5 h-3.5 border-b-2 border-r-2 border-emerald-400 rounded-br-xs pointer-events-none z-10" />
+                  </>
                 )}
               </div>
             </div>
