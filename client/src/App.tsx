@@ -8,7 +8,7 @@ import { CageVerifier } from './components/CageVerifier';
 import { PackageSorter } from './components/PackageSorter';
 import { extractTimestampFromFilename } from './lib/filenameHelper';
 import { isDeliveredStatus, getDefaultSelectedStatuses } from './lib/parser';
-import type { Stop, UserProfile, ManifestMetadata, AppMode } from './types';
+import type { Stop, UserProfile, ManifestMetadata, AppMode, PackageSortResult } from './types';
 import { ScanBarcode } from 'lucide-react';
 
 export function App() {
@@ -21,6 +21,65 @@ export function App() {
   const [sourceName, setSourceName] = useState<string>('');
   const [manifestMeta, setManifestMeta] = useState<ManifestMetadata | null>(null);
   const [user, setUser] = useState<UserProfile | undefined>(undefined);
+
+  // Persistent sorted barcodes & history across mode switching
+  const [sortedBarcodeSet, setSortedBarcodeSet] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('ra_sorted_barcodes');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const [sortHistory, setSortHistory] = useState<PackageSortResult[]>(() => {
+    try {
+      const saved = localStorage.getItem('ra_sort_history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.map((item: any) => ({ ...item, timestamp: new Date(item.timestamp) }));
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [lastSortResult, setLastSortResult] = useState<PackageSortResult | null>(() => {
+    try {
+      const saved = localStorage.getItem('ra_last_sort_result');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { ...parsed, timestamp: new Date(parsed.timestamp) };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Sync to localStorage
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('ra_sorted_barcodes', JSON.stringify(Array.from(sortedBarcodeSet)));
+    } catch {}
+  }, [sortedBarcodeSet]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('ra_sort_history', JSON.stringify(sortHistory));
+    } catch {}
+  }, [sortHistory]);
+
+  React.useEffect(() => {
+    try {
+      if (lastSortResult) {
+        localStorage.setItem('ra_last_sort_result', JSON.stringify(lastSortResult));
+      } else {
+        localStorage.removeItem('ra_last_sort_result');
+      }
+    } catch {}
+  }, [lastSortResult]);
 
   // Fetch current user from server session on mount
   React.useEffect(() => {
@@ -114,6 +173,14 @@ export function App() {
     setHasStatusColumn(false);
     setSourceName('');
     setManifestMeta(null);
+    setSortedBarcodeSet(new Set());
+    setSortHistory([]);
+    setLastSortResult(null);
+    try {
+      localStorage.removeItem('ra_sorted_barcodes');
+      localStorage.removeItem('ra_sort_history');
+      localStorage.removeItem('ra_last_sort_result');
+    } catch {}
   };
 
   // Total unique ZIP codes detected across all stops
@@ -220,6 +287,12 @@ export function App() {
                 manifestMeta={manifestMeta}
                 user={user}
                 onSwitchToSlicer={() => setActiveMode('slicer')}
+                sortedBarcodeSet={sortedBarcodeSet}
+                setSortedBarcodeSet={setSortedBarcodeSet}
+                history={sortHistory}
+                setHistory={setSortHistory}
+                lastResult={lastSortResult}
+                setLastResult={setLastSortResult}
               />
             )}
           </>

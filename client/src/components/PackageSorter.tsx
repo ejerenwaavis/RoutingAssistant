@@ -7,7 +7,6 @@ import {
   Mic,
   MicOff,
   ScanBarcode,
-  RotateCcw,
   CheckCircle2,
   AlertOctagon,
   XCircle,
@@ -19,10 +18,8 @@ import {
   CircleDot,
   Circle,
   Truck,
-  ArrowUpDown,
   Search,
   Compass,
-  Check,
   ChevronRight,
   Scan,
   AlertTriangle
@@ -36,6 +33,12 @@ interface PackageSorterProps {
   manifestMeta: ManifestMetadata | null;
   user?: UserProfile;
   onSwitchToSlicer: () => void;
+  sortedBarcodeSet: Set<string>;
+  setSortedBarcodeSet: React.Dispatch<React.SetStateAction<Set<string>>>;
+  history: PackageSortResult[];
+  setHistory: React.Dispatch<React.SetStateAction<PackageSortResult[]>>;
+  lastResult: PackageSortResult | null;
+  setLastResult: React.Dispatch<React.SetStateAction<PackageSortResult | null>>;
 }
 
 interface SorterPackageInfo {
@@ -55,22 +58,18 @@ type SorterSubTab = 'scan' | 'routes' | 'packages';
 export function cleanRouteDisplay(rawRoute: string, filename?: string): string {
   if (rawRoute && rawRoute !== "Today's Route" && rawRoute !== 'Route 1') {
     const trimmed = rawRoute.trim();
-    // Check if it's already a clean number/name like "83", "Route 83", "#83"
     const simpleMatch = trimmed.match(/^(?:route\s*#?|rt\s*#?|#)?([A-Za-z0-9_-]{1,8})$/i);
     if (simpleMatch) return simpleMatch[1];
 
-    // Check if it embeds a route number like "OnRoute_256956" or "Route_83"
     const embedded = trimmed.match(/(?:route|onroute)[_\-\s]*#?([A-Za-z0-9]+)/i);
     if (embedded && embedded[1].length <= 10) return embedded[1];
 
-    // If it's a long string with digits, extract the digits (e.g. 256956)
     const digits = trimmed.match(/\b\d{2,6}\b/);
     if (digits) return digits[0];
 
     return trimmed.slice(0, 8);
   }
 
-  // Fallback to filename if available (e.g. OnTrac_OnRoute_256956_manifest.xlsx)
   if (filename) {
     const fileEmbedded = filename.match(/(?:route|onroute|rt|batch|wave)[_\-\s]*#?([A-Za-z0-9]+)/i);
     if (fileEmbedded && fileEmbedded[1].length <= 10) return fileEmbedded[1];
@@ -175,7 +174,13 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
   stops,
   manifestMeta,
   user,
-  onSwitchToSlicer
+  onSwitchToSlicer,
+  sortedBarcodeSet,
+  setSortedBarcodeSet,
+  history,
+  setHistory,
+  lastResult,
+  setLastResult
 }) => {
   // Navigation tabs: Scan | Routes | Packages
   const [activeTab, setActiveTab] = useState<SorterSubTab>('scan');
@@ -192,11 +197,6 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
   // Sound feedback & Voice announcement toggles (default enabled)
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-
-  // Scanning state & history
-  const [lastResult, setLastResult] = useState<PackageSortResult | null>(null);
-  const [history, setHistory] = useState<PackageSortResult[]>([]);
-  const [sortedBarcodeSet, setSortedBarcodeSet] = useState<Set<string>>(new Set());
 
   // Package search filter for the 'packages' tab
   const [searchQuery, setSearchQuery] = useState('');
@@ -341,7 +341,6 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
     try {
       const elementId = 'sorter-camera-viewfinder';
 
-      // Instantiate with ALL formats supported
       if (!html5QrCodeRef.current) {
         html5QrCodeRef.current = new Html5Qrcode(elementId, {
           formatsToSupport: [
@@ -500,19 +499,19 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
   const cleanRoute = lastResult?.isFound ? cleanRouteDisplay(lastResult.route) : '83';
 
   return (
-    <div className="flex flex-col gap-4 max-w-xl mx-auto w-full pb-20 sm:pb-8">
+    <div className="flex flex-col gap-3 max-w-xl mx-auto w-full pb-20 sm:pb-8">
       {/* ─────────────────────────────────────────────────────────────
-          TAB 1: SCAN PACKAGE (Exact Layout from User Photo)
+          TAB 1: SCAN PACKAGE (One-Page Pure Zero-Scroll Setup)
           ───────────────────────────────────────────────────────────── */}
       {activeTab === 'scan' && (
-        <div className="flex flex-col gap-3.5">
+        <div className="flex flex-col gap-2.5">
           {/* Top Title Section */}
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-tight">
                 Scan Package
               </h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
                 Point, scan and we&apos;ll handle the rest.
               </p>
             </div>
@@ -522,78 +521,78 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
               <button
                 type="button"
                 onClick={() => setVoiceEnabled(!voiceEnabled)}
-                className={`p-2 rounded-xl text-xs font-semibold flex items-center transition-all border ${
+                className={`p-1.5 sm:p-2 rounded-xl text-xs font-semibold flex items-center transition-all border ${
                   voiceEnabled
                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     : 'bg-slate-100 text-slate-400 border-slate-200'
                 }`}
                 title={voiceEnabled ? 'Voice On' : 'Voice Off'}
               >
-                {voiceEnabled ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                {voiceEnabled ? <Mic className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <MicOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
               </button>
 
               <button
                 type="button"
                 onClick={() => setSoundEnabled(!soundEnabled)}
-                className={`p-2 rounded-xl text-xs font-semibold flex items-center transition-all border ${
+                className={`p-1.5 sm:p-2 rounded-xl text-xs font-semibold flex items-center transition-all border ${
                   soundEnabled
                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     : 'bg-slate-100 text-slate-400 border-slate-200'
                 }`}
                 title={soundEnabled ? 'Tone On' : 'Tone Muted'}
               >
-                {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                {soundEnabled ? <Volume2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <VolumeX className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
               </button>
 
               <button
                 type="button"
                 onClick={handleToggleEntryMode}
-                className="p-2 rounded-xl text-xs font-semibold flex items-center bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-all cursor-pointer"
+                className="p-1.5 sm:p-2 rounded-xl text-xs font-semibold flex items-center bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-all cursor-pointer"
                 title={entryMode === 'camera' ? 'Switch to Manual USB Gun / Keyboard' : 'Switch to Camera'}
               >
                 {entryMode === 'camera' ? (
-                  <Keyboard className="h-4 w-4 text-slate-600" />
+                  <Keyboard className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-600" />
                 ) : (
-                  <Camera className="h-4 w-4 text-emerald-600" />
+                  <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600" />
                 )}
               </button>
             </div>
           </div>
 
-          {/* Camera Viewfinder (Tucked at Top with Green Corner Reticles) */}
+          {/* Compact Viewfinder (<20% Reduced Height: h-36 sm:h-40) */}
           {entryMode === 'camera' ? (
-            <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-sm h-48 sm:h-56 w-full flex items-center justify-center">
+            <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-sm h-36 sm:h-40 w-full flex items-center justify-center">
               {/* HTML5 QR Code Container */}
               <div id="sorter-camera-viewfinder" className="w-full h-full" />
 
               {/* Camera Idle Surface */}
               {!isScanning && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center bg-slate-950/90 z-5">
-                  <Camera className="h-8 w-8 text-slate-500" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 p-3 text-center bg-slate-950/90 z-5">
+                  <Camera className="h-7 w-7 text-slate-500" />
                   <span className="text-xs font-semibold text-slate-300">
                     Camera Idle
                   </span>
                   <button
                     type="button"
                     onClick={startCamera}
-                    className="mt-1 px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                    className="mt-0.5 px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
                   >
                     Start Scanner
                   </button>
                 </div>
               )}
 
-              {/* Bright Green Corner Reticles [  ] matching User Photo */}
-              <div className="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-emerald-400 rounded-tl-md pointer-events-none z-10" />
-              <div className="absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-emerald-400 rounded-tr-md pointer-events-none z-10" />
-              <div className="absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-emerald-400 rounded-bl-md pointer-events-none z-10" />
-              <div className="absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-emerald-400 rounded-br-md pointer-events-none z-10" />
+              {/* Bright Green Corner Reticles [  ] */}
+              <div className="absolute top-2.5 left-2.5 w-5 h-5 border-t-2 border-l-2 border-emerald-400 rounded-tl-md pointer-events-none z-10" />
+              <div className="absolute top-2.5 right-2.5 w-5 h-5 border-t-2 border-r-2 border-emerald-400 rounded-tr-md pointer-events-none z-10" />
+              <div className="absolute bottom-2.5 left-2.5 w-5 h-5 border-b-2 border-l-2 border-emerald-400 rounded-bl-md pointer-events-none z-10" />
+              <div className="absolute bottom-2.5 right-2.5 w-5 h-5 border-b-2 border-r-2 border-emerald-400 rounded-br-md pointer-events-none z-10" />
 
-              {/* Bottom Right Camera Switch / Action Button from Photo */}
+              {/* Bottom Right Camera Switch / Action Button */}
               <button
                 type="button"
                 onClick={isScanning ? stopCamera : startCamera}
-                className="absolute bottom-3 right-3 p-2 rounded-xl bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs border border-white/20 transition-all cursor-pointer z-20 shadow-md"
+                className="absolute bottom-2.5 right-2.5 p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs border border-white/20 transition-all cursor-pointer z-20 shadow-md"
                 title={isScanning ? 'Stop Camera' : 'Start Camera'}
               >
                 <Camera className="h-4 w-4 text-emerald-400" />
@@ -601,7 +600,7 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
 
               {/* Active scan status indicator */}
               {isScanning && (
-                <div className="absolute top-3 left-10 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-xs text-[10px] font-bold text-emerald-400 z-10">
+                <div className="absolute top-2.5 left-9 flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-xs text-[10px] font-bold text-emerald-400 z-10">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   <span>Live 25fps Scanner</span>
                 </div>
@@ -609,7 +608,7 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
             </div>
           ) : (
             /* Manual Barcode Text Form */
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs">
+            <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-2xs">
               <form onSubmit={handleManualSubmit} className="flex items-center gap-2 w-full">
                 <div className="relative flex-1">
                   <ScanBarcode className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -619,14 +618,14 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
                     value={manualCode}
                     onChange={(e) => setManualCode(e.target.value)}
                     placeholder="Scan with USB gun or type barcode..."
-                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white rounded-xl font-mono text-xs text-slate-900 outline-hidden"
+                    className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white rounded-xl font-mono text-xs text-slate-900 outline-hidden"
                     autoComplete="off"
                     autoFocus
                   />
                 </div>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0"
                 >
                   Sort
                 </button>
@@ -659,44 +658,44 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
           )}
 
           {/* ─────────────────────────────────────────────────────────────
-              HERO RESULT CARD: EXACT LAYOUT FROM IMAGE 2
-              TWO COLUMNS (ROUTE & SORT TO) - NO OVERLAP
+              HERO RESULT CARD: EXACT LAYOUT WITH BOOTSTRAP-STYLE GRID
+              NO REDUNDANT BUTTONS (CONTINUOUS SCANNING)
               ───────────────────────────────────────────────────────────── */}
           {lastResult?.isFound ? (
             <div className="rounded-2xl overflow-hidden shadow-xs border border-slate-200 bg-white">
               {/* Header Dark Green Banner matching Photo */}
-              <div className="bg-[#064e3b] px-4 py-3 flex flex-col gap-1 text-white">
+              <div className="bg-[#064e3b] px-4 py-2.5 flex flex-col gap-0.5 text-white">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <div className="h-5 w-5 rounded bg-emerald-500/20 grid place-items-center text-emerald-300">
+                    <div className="h-4.5 w-4.5 rounded bg-emerald-500/20 grid place-items-center text-emerald-300">
                       <Boxes className="h-3 w-3" />
                     </div>
                     <span className="text-[10px] font-black uppercase tracking-wider text-emerald-200">
                       PACKAGE SCANNED
                     </span>
                   </div>
-                  <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                  <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400" />
                 </div>
 
-                {/* Tracking Number: Clean monospaced, not too big as requested */}
-                <div className="font-mono text-base sm:text-lg font-bold tracking-tight text-white truncate mt-0.5">
+                {/* Tracking Number: Clean monospaced, balanced */}
+                <div className="font-mono text-sm sm:text-base font-bold tracking-tight text-white truncate mt-0.5">
                   {lastResult.barcode}
                 </div>
               </div>
 
-              {/* Card Body matching Image 2 */}
-              <div className="p-4 sm:p-5 flex flex-col gap-3.5">
-                {/* EXACT 2-COLUMN METRICS ROW FROM IMAGE 2 */}
-                <div className="grid grid-cols-2 gap-4 pb-3.5 border-b border-slate-100">
+              {/* Card Body with Big Route/Stop & Bootstrap 2-Column Grid */}
+              <div className="p-3.5 sm:p-4 flex flex-col gap-2.5">
+                {/* 2-Column Metrics: Route (Left) and Stop Number (Right) */}
+                <div className="grid grid-cols-2 gap-3 pb-2.5 border-b border-slate-100">
                   {/* Column 1: Route (Huge Bold Number) */}
                   <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                       Route
                     </span>
                     <div className="text-4xl sm:text-5xl font-black text-slate-900 leading-none my-1 truncate">
                       #{cleanRoute}
                     </div>
-                    <div className="mt-1">
+                    <div>
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
                         ON ROUTE
                       </span>
@@ -705,78 +704,66 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
 
                   {/* Column 2: Sort to (Huge Bold Stop Number) */}
                   <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                       Sort to
                     </span>
-                    <div className="text-3xl sm:text-4xl font-black text-emerald-600 flex items-center gap-1.5 leading-none my-1 truncate">
+                    <div className="text-3xl sm:text-4xl font-black text-emerald-600 flex items-center gap-1 leading-none my-1 truncate">
                       <MapPin className="h-6 w-6 text-emerald-600 shrink-0" />
                       <span>Stop {lastResult.seq ?? '—'}</span>
                     </div>
-                    <span className="text-xs font-medium text-slate-400 mt-1">
+                    <span className="text-[11px] font-medium text-slate-400">
                       {lastResult.seq ? 'Next stop' : 'Unsequenced'}
                     </span>
                   </div>
                 </div>
 
-                {/* Details List with Generous Spacing matching Image 2 */}
-                <div className="flex flex-col gap-2.5 text-xs sm:text-sm">
-                  {/* Driver */}
-                  <div className="flex items-center gap-3 text-slate-700">
-                    <div className="h-7 w-7 rounded-lg bg-slate-100 text-slate-600 grid place-items-center shrink-0">
-                      <User className="h-4 w-4" />
+                {/* Details Section: Bootstrap-style 2-column row + full-width address row */}
+                <div className="flex flex-col gap-2 text-xs sm:text-sm">
+                  {/* Row 1: Driver (col 1) + Destination ZIP (col 2) */}
+                  <div className="grid grid-cols-2 gap-3 items-center">
+                    {/* Driver */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-7 w-7 rounded-lg bg-slate-100 text-slate-600 grid place-items-center shrink-0">
+                        <User className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none">
+                          Driver
+                        </span>
+                        <span className="font-bold text-slate-900 text-xs sm:text-sm truncate leading-tight mt-0.5">
+                          {lastResult.driver}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-baseline gap-2 min-w-0">
-                      <span className="text-slate-400 font-medium">Driver:</span>
-                      <span className="font-bold text-slate-900 text-sm sm:text-base truncate">
-                        {lastResult.driver}
-                      </span>
-                    </div>
-                  </div>
 
-                  {/* Destination ZIP (Clean 5-digit code, not crowded) */}
-                  <div className="flex items-center gap-3 text-slate-700">
-                    <div className="h-7 w-7 rounded-lg bg-slate-100 text-slate-600 grid place-items-center shrink-0">
-                      <MapPin className="h-4 w-4" />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-slate-400 font-medium">Destination ZIP:</span>
-                        <span className="font-black text-slate-900 text-sm sm:text-base">
+                    {/* Destination ZIP */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-7 w-7 rounded-lg bg-slate-100 text-slate-600 grid place-items-center shrink-0">
+                        <MapPin className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none">
+                          Destination ZIP
+                        </span>
+                        <span className="font-black text-slate-900 text-xs sm:text-sm truncate leading-tight mt-0.5">
                           {lastResult.zip}
                         </span>
                       </div>
-                      {lastResult.address && (
-                        <span className="text-[11px] text-slate-400 truncate max-w-sm">
-                          {lastResult.address}
-                        </span>
-                      )}
                     </div>
                   </div>
 
-                  {/* Package Type */}
-                  <div className="flex items-center gap-3 text-slate-700">
-                    <div className="h-7 w-7 rounded-lg bg-slate-100 text-slate-600 grid place-items-center shrink-0">
-                      <Truck className="h-4 w-4" />
+                  {/* Row 2 (Single Column, Full Width): Shortened Destination Address */}
+                  {lastResult.address && (
+                    <div className="flex items-center gap-2 pt-1.5 text-slate-600 min-w-0 border-t border-slate-100">
+                      <div className="h-6 w-6 rounded-md bg-slate-50 text-slate-400 grid place-items-center shrink-0">
+                        <Truck className="h-3.5 w-3.5" />
+                      </div>
+                      <span className="text-[11px] sm:text-xs text-slate-700 font-medium truncate" title={lastResult.address}>
+                        {lastResult.address}
+                      </span>
                     </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-slate-400 font-medium">Package Type:</span>
-                      <span className="font-bold text-slate-900">Standard</span>
-                    </div>
-                  </div>
+                  )}
                 </div>
-
-                {/* Full-Width Action Button matching Image 2 */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isScanning) startCamera();
-                    textInputRef.current?.focus();
-                  }}
-                  className="w-full py-3.5 px-4 rounded-xl font-bold text-sm sm:text-base flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md shadow-emerald-600/20 transition-all cursor-pointer mt-1"
-                >
-                  <Check className="h-5 w-5" />
-                  <span>Continue Scanning</span>
-                </button>
               </div>
             </div>
           ) : lastResult && !lastResult.isFound ? (
@@ -785,54 +772,45 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
                ───────────────────────────────────────────────────────────── */
             <div className="rounded-2xl overflow-hidden shadow-md border-2 border-rose-500 bg-white animate-in zoom-in-95 duration-150">
               {/* Flashing Red Header Banner */}
-              <div className="bg-rose-700 px-4 py-3.5 flex flex-col gap-1 text-white animate-pulse">
+              <div className="bg-rose-700 px-4 py-2.5 flex flex-col gap-0.5 text-white animate-pulse">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-rose-200" />
-                    <span className="text-xs font-black uppercase tracking-wider text-rose-100">
+                    <AlertTriangle className="h-4 w-4 text-rose-200" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-rose-100">
                       NOT ON THIS ROUTE
                     </span>
                   </div>
-                  <XCircle className="h-5 w-5 text-rose-200" />
+                  <XCircle className="h-4 w-4 text-rose-200" />
                 </div>
-                <div className="font-mono text-base font-bold text-white truncate mt-0.5">
+                <div className="font-mono text-sm sm:text-base font-bold text-white truncate mt-0.5">
                   {lastResult.barcode}
                 </div>
               </div>
 
-              {/* Red Warning Card Body */}
-              <div className="p-4 sm:p-5 flex flex-col gap-3">
+              {/* Red Warning Card Body (No redundant button) */}
+              <div className="p-3.5 sm:p-4 flex flex-col gap-2">
                 <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex flex-col gap-1">
-                  <span className="text-rose-900 font-black text-sm uppercase">
+                  <span className="text-rose-900 font-black text-xs sm:text-sm uppercase">
                     UNASSIGNED PACKAGE — DO NOT LOAD
                   </span>
-                  <p className="text-xs text-rose-700 leading-relaxed">
+                  <p className="text-[11px] sm:text-xs text-rose-700 leading-relaxed">
                     This parcel tracking number was not found in today&apos;s assigned route manifest. Put this package aside and check with dispatch.
                   </p>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isScanning) startCamera();
-                    textInputRef.current?.focus();
-                  }}
-                  className="w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-all cursor-pointer"
-                >
-                  <Camera className="h-4 w-4" />
-                  <span>Scan Next Package</span>
-                </button>
+                <div className="text-center text-[10px] text-rose-500 font-bold uppercase tracking-wider pt-0.5">
+                  Continuous Scan Active · Aim camera at next parcel
+                </div>
               </div>
             </div>
           ) : (
             /* Ready to Scan Initial Placeholder matching Card Frame */
-            <div className="rounded-2xl overflow-hidden shadow-2xs border border-slate-200/80 bg-white p-5 text-center flex flex-col items-center gap-2.5">
-              <div className="h-10 w-10 rounded-xl bg-slate-100 text-slate-400 grid place-items-center">
+            <div className="rounded-2xl overflow-hidden shadow-2xs border border-slate-200/80 bg-white p-4 text-center flex flex-col items-center gap-2">
+              <div className="h-9 w-9 rounded-xl bg-slate-100 text-slate-400 grid place-items-center">
                 <ScanBarcode className="h-5 w-5 text-slate-500" />
               </div>
               <div className="flex flex-col gap-0.5">
-                <h3 className="font-bold text-slate-900 text-sm">Ready to Sort Packages</h3>
-                <p className="text-xs text-slate-500 max-w-sm">
+                <h3 className="font-bold text-slate-900 text-xs sm:text-sm">Ready to Sort Packages</h3>
+                <p className="text-[11px] text-slate-500 max-w-sm">
                   Aim camera at any 1D barcode or 2D QR code. The route number, stop sequence, and driver will display immediately.
                 </p>
               </div>
@@ -840,7 +818,7 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
           )}
 
           {/* Recent Scans Row */}
-          <div className="flex items-center justify-between gap-3 pt-1 text-xs">
+          <div className="flex items-center justify-between gap-3 pt-0.5 text-xs">
             <div className="flex items-center gap-2 text-slate-600 min-w-0">
               <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
               <span className="font-semibold text-slate-800 shrink-0">Recent:</span>
@@ -1035,7 +1013,7 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          TAB 3: RECENT SORTED PARCELS
+          TAB 3: RECENT SORTED PARCELS (Persistent across tabs)
           ───────────────────────────────────────────────────────────── */}
       {activeTab === 'packages' && (
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col gap-4">
@@ -1103,7 +1081,9 @@ export const PackageSorter: React.FC<PackageSorterProps> = ({
 
                     <div className="flex items-center gap-2.5 shrink-0">
                       <span className="text-[11px] text-slate-400 font-medium">
-                        {item.timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        {item.timestamp instanceof Date
+                          ? item.timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                          : new Date(item.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                       </span>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
                         SORTED
